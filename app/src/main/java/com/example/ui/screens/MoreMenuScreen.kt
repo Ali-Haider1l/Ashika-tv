@@ -412,7 +412,7 @@ fun MoreMenuScreen(
                             )
                             Button(
                                 onClick = {
-                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("$facebook"))
+                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.facebook.com/share/1ERbHrDCno/"))
                                     context.startActivity(intent)
                                 },
                                 colors = ButtonDefaults.buttonColors(
