@@ -17,7 +17,7 @@ android {
     minSdk = 24
     targetSdk = 36
     versionCode = 11
-    versionName = "6.3.1" // Clipboard playlist import and verified installer release
+    versionName = "6.3.1" // Clipboard playlist import and verified installer release; corrected release APK verification path
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
