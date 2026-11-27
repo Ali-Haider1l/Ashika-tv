@@ -17,7 +17,7 @@ android {
     minSdk = 24
     targetSdk = 36
     versionCode = 10
-    versionName = "6.3.0" // Major feature and installer validation release
+    versionName = "6.3.0" // Major feature and installer validation release; verified release pipeline
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
