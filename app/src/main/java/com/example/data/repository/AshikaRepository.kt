@@ -148,10 +148,9 @@ class AshikaRepository(
     suspend fun importLocalM3u(contentResolver: ContentResolver, uri: Uri): Result<Int> =
         withContext(Dispatchers.IO) {
             try {
-                val text = contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
-                    ?: return@withContext Result.failure(IllegalStateException("Unable to read selected file."))
-                val parsed = M3uParser.parseWithMetadata(text, source = "file")
-                val channels = parsed.channels
+                val parsed = fetcher.m3uPlaylistService.parseFromLocalUri(contentResolver, uri)
+                    .getOrElse { return@withContext Result.failure(it) }
+                val channels = parsed.toChannelEntities(source = "file")
                 if (channels.isEmpty()) {
                     return@withContext Result.failure(IllegalStateException("No valid HTTP/HTTPS channels found in file."))
                 }

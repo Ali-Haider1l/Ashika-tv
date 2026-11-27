@@ -12,19 +12,24 @@ data class ParsedM3uResult(
 
 object M3uParser {
 
-    private val groupRegex = Regex("""group-title=["']([^"']*)["']""", RegexOption.IGNORE_CASE)
-    private val logoRegex = Regex("""tvg-logo=["']([^"']*)["']""", RegexOption.IGNORE_CASE)
-    private val tvgIdRegex = Regex("""tvg-id=["']([^"']*)["']""", RegexOption.IGNORE_CASE)
-    private val tvgNameRegex = Regex("""tvg-name=["']([^"']*)["']""", RegexOption.IGNORE_CASE)
+    private val groupRegex = Regex("""group-title=(?:["']([^"']*)["']|([^\s,]+))""", RegexOption.IGNORE_CASE)
+    private val logoRegex = Regex("""tvg-logo=(?:["']([^"']*)["']|([^\s,]+))""", RegexOption.IGNORE_CASE)
+    private val tvgIdRegex = Regex("""tvg-id=(?:["']([^"']*)["']|([^\s,]+))""", RegexOption.IGNORE_CASE)
+    private val tvgNameRegex = Regex("""tvg-name=(?:["']([^"']*)["']|([^\s,]+))""", RegexOption.IGNORE_CASE)
     private val headerTvgUrlRegex = Regex("""(?:url-tvg|x-tvg-url)=["']([^"']*)["']""", RegexOption.IGNORE_CASE)
     private val httpRegex = Regex("""^https?://""", RegexOption.IGNORE_CASE)
+
+    private fun MatchResult?.firstNonEmptyGroup(): String {
+        if (this == null) return ""
+        return groupValues.drop(1).firstOrNull { it.isNotEmpty() }.orEmpty().trim()
+    }
 
     fun parse(content: String, source: String = "playlist"): List<ChannelEntity> {
         return parseWithMetadata(content, source).channels
     }
 
     fun parseWithMetadata(content: String, source: String = "playlist"): ParsedM3uResult {
-        val trimmed = content.trim()
+        val trimmed = content.trim().trimStart('\uFEFF')
         if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
             val jsonChannels = parseToffeeJsonPlaylist(trimmed, source)
             if (jsonChannels.isNotEmpty()) {
@@ -44,7 +49,7 @@ object M3uParser {
         val pendingHeaders = LinkedHashMap<String, String>()
 
         for (rawLine in lines) {
-            val line = rawLine.trim()
+            val line = rawLine.trim().trimStart('\uFEFF')
             if (line.isEmpty()) continue
 
             when {
@@ -62,7 +67,7 @@ object M3uParser {
                 line.startsWith("#EXTINF", ignoreCase = true) -> {
                     isM3uContext = true
                     val commaIdx = findExtinfCommaIndex(line)
-                    val attrName = tvgNameRegex.find(line)?.groupValues?.getOrNull(1)?.trim().orEmpty()
+                    val attrName = tvgNameRegex.find(line).firstNonEmptyGroup()
                     val tailName = if (commaIdx >= 0 && commaIdx + 1 < line.length) {
                         line.substring(commaIdx + 1).trim()
                     } else {
@@ -70,10 +75,10 @@ object M3uParser {
                     }
                     pendingName = tailName.ifEmpty { attrName }.ifEmpty { "Unknown Channel" }
                     pendingGroup = normalizeGroupTitle(
-                        groupRegex.find(line)?.groupValues?.getOrNull(1).orEmpty()
+                        groupRegex.find(line).firstNonEmptyGroup()
                     )
-                    pendingLogo = logoRegex.find(line)?.groupValues?.getOrNull(1)?.trim().orEmpty()
-                    pendingTvgId = tvgIdRegex.find(line)?.groupValues?.getOrNull(1)?.trim().orEmpty()
+                    pendingLogo = logoRegex.find(line).firstNonEmptyGroup()
+                    pendingTvgId = tvgIdRegex.find(line).firstNonEmptyGroup()
                 }
 
                 line.startsWith("#EXTGRP:", ignoreCase = true) -> {

@@ -7,8 +7,10 @@ import com.example.data.model.AppLanguage
 import com.example.data.network.ToffeeExtractor
 import com.example.data.parser.EpgParser
 import com.example.data.parser.M3uParser
+import com.example.data.service.M3uPlaylistService
 import com.example.ui.util.PipHelper
 import com.example.ui.util.ToffeeStrings
+import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -18,6 +20,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -211,6 +214,34 @@ class ExampleRobolectricTest {
       assertTrue(ToffeeStrings.diagBitrateLabel(lang).isNotBlank())
       assertTrue(ToffeeStrings.diagResolutionLabel(lang).isNotBlank())
       assertTrue(ToffeeStrings.diagFrameRateLabel(lang).isNotBlank())
+    }
+  }
+
+  @Test
+  fun `m3u playlist service parses local file with BOM and extracts channel model`() = runBlocking {
+    val tempFile = File.createTempFile("sample_iptv", ".m3u")
+    try {
+      tempFile.writeText(
+        "\uFEFF#EXTM3U url-tvg=\"https://guide.example/epg.xml\"\n" +
+          "#EXTINF:-1 tvg-id=\"ch.1\" group-title=News,Somoy News HD\n" +
+          "https://stream.example.com/somoy/index.m3u8\n" +
+          "#EXTINF:-1 group-title=\"Sports\",T Sports\n" +
+          "https://stream.example.com/tsports/index.m3u8\n",
+        Charsets.UTF_8
+      )
+
+      val service = M3uPlaylistService()
+      val result = service.parseFromLocalFile(tempFile).getOrThrow()
+
+      assertEquals(listOf("https://guide.example/epg.xml"), result.epgUrls)
+      assertEquals(2, result.channels.size)
+      assertEquals("Somoy News HD", result.channels[0].channelName)
+      assertEquals("News", result.channels[0].groupTitle)
+      assertEquals("https://stream.example.com/somoy/index.m3u8", result.channels[0].streamUrl)
+      assertEquals("T Sports", result.channels[1].channelName)
+      assertEquals("Sports", result.channels[1].groupTitle)
+    } finally {
+      tempFile.delete()
     }
   }
 }

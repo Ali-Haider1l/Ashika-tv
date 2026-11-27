@@ -11,6 +11,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -30,6 +31,7 @@ import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -232,9 +234,32 @@ fun DockedLivePlayer(
                                 onClose = onToggleDiagnostics,
                                 modifier = Modifier
                                     .align(Alignment.BottomEnd)
-                                    .padding(8.dp)
+                                    .padding(start = 8.dp, top = 8.dp, end = 8.dp, bottom = 58.dp)
                                     .width(196.dp)
                             )
+                        }
+
+                        // Fullscreen quick-toggle button overlaid on the video surface
+                        Surface(
+                            shape = CircleShape,
+                            color = ObsidianNight.copy(alpha = 0.74f),
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.24f)),
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(8.dp)
+                        ) {
+                            IconButton(
+                                onClick = onEnterFullscreen,
+                                modifier = Modifier
+                                    .minimumInteractiveComponentSize()
+                                    .testTag("player_video_fullscreen_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Fullscreen,
+                                    contentDescription = stringResource(R.string.cd_fullscreen),
+                                    tint = Color.White
+                                )
+                            }
                         }
                     }
 
@@ -307,8 +332,7 @@ fun DockedLivePlayer(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 4.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
@@ -347,7 +371,13 @@ fun DockedLivePlayer(
                     }
                 }
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .horizontalScroll(rememberScrollState()),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.End
+                ) {
                     IconButton(
                         onClick = onToggleFavorite,
                         modifier = Modifier
@@ -407,6 +437,9 @@ fun DockedLivePlayer(
                             contentDescription = stringResource(R.string.cd_system_pip)
                         )
                     }
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
                         onClick = onEnterFullscreen,
                         modifier = Modifier
@@ -415,7 +448,8 @@ fun DockedLivePlayer(
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.Fullscreen,
-                            contentDescription = stringResource(R.string.cd_fullscreen)
+                            contentDescription = stringResource(R.string.cd_fullscreen),
+                            tint = MaterialTheme.colorScheme.onSurface
                         )
                     }
                     IconButton(
@@ -1022,6 +1056,14 @@ fun FullscreenPlayerOverlay(
                     }
                     IconButton(onClick = onNext, modifier = Modifier.minimumInteractiveComponentSize()) {
                         Icon(Icons.Rounded.SkipNext, stringResource(R.string.cd_next_channel), tint = Color.White)
+                    }
+                    IconButton(
+                        onClick = onExitFullscreen,
+                        modifier = Modifier
+                            .minimumInteractiveComponentSize()
+                            .testTag("fullscreen_bottom_exit_button")
+                    ) {
+                        Icon(Icons.Rounded.FullscreenExit, stringResource(R.string.cd_fullscreen), tint = Color.White)
                     }
                     IconButton(onClick = onStop, modifier = Modifier.minimumInteractiveComponentSize()) {
                         Icon(Icons.Rounded.Stop, stringResource(R.string.cd_stop_player), tint = MaterialTheme.colorScheme.error)

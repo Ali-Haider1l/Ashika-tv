@@ -5,6 +5,7 @@ import com.example.data.parser.EpgParser
 import com.example.data.parser.M3uParser
 import com.example.data.parser.ParsedEpgData
 import com.example.data.parser.ParsedM3uResult
+import com.example.data.service.M3uPlaylistService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -32,28 +33,10 @@ class PlaylistFetcher {
         .build()
 
     private val toffeeExtractor = ToffeeExtractor(client)
+    val m3uPlaylistService = M3uPlaylistService(client)
 
-    suspend fun fetchM3u(url: String): Result<ParsedM3uResult> = withContext(Dispatchers.IO) {
-        try {
-            val request = Request.Builder()
-                .url(url.trim())
-                .header("User-Agent", "AshikaLiveTV-Android/1.0")
-                .build()
-
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    return@withContext Result.failure(IOException("HTTP ${response.code}"))
-                }
-                val body = response.body?.string().orEmpty()
-                val parsed = M3uParser.parseWithMetadata(body, source = "playlist")
-                if (parsed.channels.isEmpty()) {
-                    return@withContext Result.failure(IllegalStateException("No playable channels found in playlist."))
-                }
-                Result.success(parsed)
-            }
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
+    suspend fun fetchM3u(url: String): Result<ParsedM3uResult> {
+        return m3uPlaylistService.parseFromUrl(url).map { it.toParsedM3uResult(source = "playlist") }
     }
 
     suspend fun fetchToffeeAndBdBundle(playlistUrls: List<String>): Result<ToffeeAndBdBundleResult> =
