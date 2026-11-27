@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import android.app.Activity
 import android.graphics.Rect
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -57,6 +58,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -73,6 +75,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -81,6 +84,8 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.graphics.toRect
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
@@ -851,6 +856,19 @@ fun FullscreenPlayerOverlay(
     onVideoBoundsChanged: (Rect) -> Unit = {}
 ) {
     BackHandler { onExitFullscreen() }
+
+    // Use immersive system UI while the player is fullscreen, restoring it on exit.
+    val playerView = LocalView.current
+    DisposableEffect(playerView) {
+        val window = (playerView.context as? Activity)?.window
+        val controller = window?.let { WindowInsetsControllerCompat(it, playerView) }
+        controller?.systemBarsBehavior =
+            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        controller?.hide(WindowInsetsCompat.Type.systemBars())
+        onDispose {
+            controller?.show(WindowInsetsCompat.Type.systemBars())
+        }
+    }
 
     var showControls by remember { mutableStateOf(true) }
     var showChannelList by remember { mutableStateOf(false) }
