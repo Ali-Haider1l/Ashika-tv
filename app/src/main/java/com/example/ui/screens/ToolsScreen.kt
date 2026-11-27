@@ -144,6 +144,15 @@ fun ToolsScreen(
         }
 
         item {
+            SportsQuickAccessCard(
+                onOpenSportsChannels = {
+                    selectedTool = AshikaTool.FINDER
+                    onRunFinder("Sports")
+                }
+            )
+        }
+
+        item {
             when (selectedTool) {
                 AshikaTool.FINDER -> ChannelFinderCard(
                     query = uiState.finderQuery,
@@ -180,6 +189,73 @@ fun ToolsScreen(
                     onGeneratePairCode = onGeneratePairCode
                 )
             }
+        }
+    }
+}
+
+
+@Composable
+private fun SportsQuickAccessCard(
+    onOpenSportsChannels: () -> Unit
+) {
+    val context = LocalContext.current
+
+    fun openWebPage(url: String) {
+        runCatching {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        }
+    }
+
+    Surface(
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Rounded.SportsSoccer,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(Modifier.width(8.dp))
+                Text("Live Sports Hub", style = MaterialTheme.typography.titleMedium)
+            }
+            Text(
+                "Live cricket and football scores, plus sports channels available in your loaded playlists.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilledTonalButton(
+                    onClick = { openWebPage("https://www.espncricinfo.com/live-cricket-score") },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Cricket Scores")
+                }
+                FilledTonalButton(
+                    onClick = { openWebPage("https://www.espn.com/soccer/scoreboard") },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Football Scores")
+                }
+            }
+            Button(
+                onClick = onOpenSportsChannels,
+                modifier = Modifier.fillMaxWidth().testTag("sports_channels_button")
+            ) {
+                Icon(Icons.Rounded.PlayArrow, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Find & Watch Sports Channels")
+            }
+            Text(
+                "Streaming plays from your own M3U playlist. No unofficial stream links are bundled.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
