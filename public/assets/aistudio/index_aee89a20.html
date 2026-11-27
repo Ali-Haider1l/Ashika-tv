@@ -1,0 +1,1082 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ashika Live TV</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#080b18;color:white;font-family:Arial,sans-serif}
+header{height:65px;background:#11152a;display:flex;align-items:center;padding:0 18px;gap:15px;border-bottom:1px solid #292d48}
+.logo{font-size:20px;font-weight:bold;color:#b69cff}
+.live{background:#ed3159;padding:5px 9px;border-radius:5px;font-size:11px}
+.menu{font-size:26px;cursor:pointer}
+.layout{display:flex;min-height:calc(100vh - 65px)}
+aside{width:220px;background:#101429;padding:20px 12px;flex-shrink:0}
+aside button{display:block;width:100%;text-align:left;background:none;color:#c6c8d8;border:0;padding:14px;border-radius:8px;font-size:15px;cursor:pointer}
+aside button:hover,aside button.active{background:#292044;color:white}
+main{padding:22px;width:100%;min-width:0}
+.hero{padding:24px;border-radius:15px;background:linear-gradient(120deg,#39205e,#151d42);margin-bottom:20px}
+.hero h2{margin:0 0 8px;font-size:25px}
+.search{width:100%;padding:14px;border-radius:9px;border:1px solid #343954;background:#171c32;color:white;font-size:15px;margin-bottom:15px}
+.categories{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:20px}
+.categories button,.action{background:#24213e;color:white;border:1px solid #4c3c70;padding:9px 15px;border-radius:20px;cursor:pointer}
+.categories button.active,.action:hover{background:#8055d6}
+.section{display:flex;justify-content:space-between;align-items:center}
+.channels{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:13px}
+.channel{background:#151a30;border:1px solid #292e4a;border-radius:12px;padding:15px;cursor:pointer;min-height:125px}
+.channel:hover{border-color:#a27aff;background:#201c3b}
+.channel .symbol{font-size:30px;margin-bottom:10px}
+.channel strong{display:block;font-size:14px}
+.channel small{color:#a5a8bc}
+.heart{float:right;color:#ff6688;font-size:19px}
+#playerBox{display:none;background:#000;border-radius:12px;overflow:hidden;margin:18px 0}
+video{width:100%;max-height:55vh;background:#000}
+.playerbar{padding:12px;display:flex;gap:10px;flex-wrap:wrap}
+.empty{padding:35px;text-align:center;color:#aeb1c5;background:#151a30;border-radius:12px}
+.modal{display:none;position:fixed;inset:0;background:#000b;align-items:center;justify-content:center;padding:20px}
+.modalbox{background:#171c32;padding:22px;border-radius:13px;width:min(440px,100%);max-height:90vh;overflow-y:auto}
+#adminPanel .modalbox{width:min(650px,100%)}
+.adminInput{width:100%;padding:12px;margin:7px 0 12px;background:#090e20;color:white;border:1px solid #444;border-radius:7px}
+.adminList{max-height:180px;overflow:auto;margin:12px 0}
+.adminItem{background:#24213e;padding:10px;margin:6px 0;border-radius:7px;display:flex;justify-content:space-between;gap:8px;align-items:center}
+.modal input{width:100%;padding:13px;margin:10px 0;background:#090e20;color:white;border:1px solid #444;border-radius:7px}
+.modal button{margin:5px 5px 5px 0}
+@media(max-width:650px){aside{display:none}main{padding:13px}.hero h2{font-size:21px}}
+
+html,body{height:100%;overflow:hidden}
+.layout{height:calc(100vh - 65px);min-height:0;overflow:hidden}
+aside{height:100%;overflow-y:auto}
+main{height:100%;overflow-y:auto;overscroll-behavior:contain}
+.channels{padding-bottom:50px}
+.channel:focus,button:focus,input:focus{
+ outline:3px solid #b69cff;
+ outline-offset:3px;
+ background:#302451;
+}
+button{cursor:pointer}
+
+
+.playerLayout{display:flex;gap:12px;align-items:stretch;background:#080b18}
+.playerStage{flex:1;min-width:0}
+.playerStage video{width:100%;max-height:55vh;aspect-ratio:16/9;object-fit:contain}
+.playerSide{width:230px;flex-shrink:0;background:#151a30;padding:12px;max-height:55vh;overflow-y:auto;opacity:1;transition:width .3s,opacity .3s,padding .3s}.playerLayout.channels-hidden .playerSide{width:0;padding:0;opacity:0;overflow:hidden}
+.playerSide h3{margin:4px 0 12px;font-size:16px}
+.playerChannel{display:block;width:100%;text-align:left;background:#24213e;color:white;border:1px solid #393454;padding:11px;margin-bottom:7px;border-radius:7px}
+.playerChannel.active{background:#8055d6;border-color:#b69cff}
+@media(max-width:700px){.playerLayout{flex-direction:column}.playerSide{width:100%;max-height:190px}.playerStage video{max-height:40vh}}
+
+
+/* Ashika feature dashboard */
+.featureTools{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}
+.featurePanel{display:none;background:#151a30;border:1px solid #393454;border-radius:12px;padding:16px;margin:14px 0}
+.featurePanel h3{margin-top:0;color:#c8b2ff}
+.featurePanel input,.featurePanel textarea,.featurePanel select{width:100%;padding:11px;margin:7px 0;background:#090e20;color:white;border:1px solid #444;border-radius:7px}
+.featureResult{background:#24213e;padding:12px;border-radius:8px;margin:9px 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.featureGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px}
+.featureTile{background:#201c3b;padding:13px;border-radius:9px;border:1px solid #393454}
+#ashikaSplash{position:fixed;z-index:99999;inset:0;background:linear-gradient(135deg,#080b18,#39205e,#11152a);display:flex;align-items:center;justify-content:center;text-align:center;transition:opacity .5s}
+#ashikaSplash .splashTitle{font-size:30px;font-weight:bold;color:#d5c4ff;letter-spacing:2px}
+#ashikaSplash .splashSub{color:#ddd;margin-top:12px}
+.previewBox{display:none;background:#24213e;border-radius:9px;padding:12px;margin:10px 0}
+#qrImage{display:block;width:190px;height:190px;max-width:100%;background:white;padding:8px;margin:12px auto;border-radius:8px}
+@media(max-width:600px){.featurePanel{padding:12px}.featureTools button{font-size:12px}}
+
+</style>
+</head>
+<body>
+
+<div id="ashikaSplash">
+ <div>
+  <div class="splashTitle">ASHIKA LIVE TV</div>
+  <div class="splashSub">Your entertainment starts here</div>
+  <div style="margin-top:22px;color:#c8b2ff">● LOADING</div>
+ </div>
+</div>
+
+<header>
+<span class="menu" onclick="toggleMenu()">☰</span>
+<div class="logo">ASHIKA LIVE TV</div>
+<span class="live">● LIVE</span>
+</header>
+<div class="layout">
+<aside id="sidebar">
+<button class="active" onclick="showPage('home',this)">⌂ Home</button>
+<button onclick="showPage('all',this)">▣ All Channels</button>
+<button onclick="showPage('favorites',this)">♥ My Favorites</button>
+<button onclick="showPage('recent',this)">◷ Recently Watched</button>
+<button onclick="openToffee()">📺 Toffee Live</button>
+<button onclick="openSettings()">⚙ Settings / Playlist</button>
+<button onclick="openAdmin()">🛡 Admin Panel</button>
+<button onclick="showAbout()">ⓘ About</button>
+</aside>
+<main>
+<div class="hero">
+<h2>Welcome to Ashika Live TV</h2>
+<p>Watch your favourite live channels in one place.</p>
+<button class="action" onclick="openSettings()">＋ Add Playlist</button>
+<button class="action" onclick="openPublicChannel()">＋ Add Channel</button>
+</div>
+<input class="search" id="search" placeholder="⌕ Search channels..." oninput="render()">
+<div class="categories" id="categories">
+<button class="active" onclick="setCategory('All',this)">All</button>
+<button onclick="setCategory('News',this)">News</button>
+<button onclick="setCategory('Sports',this)">Sports</button>
+<button onclick="setCategory('Entertainment',this)">Entertainment</button>
+<button onclick="setCategory('Music',this)">Music</button>
+</div>
+<div id="playerBox">
+<div class="playerLayout" onmousemove="showChannelList()" onmouseleave="scheduleChannelHide()" onfocusin="showChannelList()" onfocusout="scheduleChannelHide()">
+ <div class="playerStage">
+  <video id="player" controls autoplay></video>
+  <div class="playerbar">
+   <strong id="playingName">Now Playing</strong>
+   <button class="action" onclick="changeChannel(-1)">◀ PREVIOUS</button>
+   <button class="action" onclick="changeChannel(1)">NEXT ▶</button>
+   <button class="action" onclick="toggleChannelList()">CHANNELS</button>
+   <button class="action" onclick="fullscreen()">FULL SCREEN</button>
+   <button class="action" onclick="stopPlayer()">STOP</button>
+  </div>
+ </div>
+ <div class="playerSide">
+  <h3>📺 Channel List</h3>
+  <div id="playerChannelList"></div>
+ </div>
+</div>
+</div>
+<div class="section"><h3 id="heading">All Channels</h3><small id="count">0 Channels</small></div>
+<div class="channels" id="channels"></div>
+
+<!-- ASHIKA_ALL_FEATURES_V2 -->
+<div class="featureTools">
+ <button class="action" onclick="ashikaOpenFeature('aiPanel')">🤖 AI Assistant</button>
+ <button class="action" onclick="ashikaOpenFeature('remotePanel')">📱 QR Remote</button>
+ <button class="action" onclick="ashikaOpenFeature('matchPanel')">⚽ Match Center</button>
+ <button class="action" onclick="ashikaOpenFeature('familyPanel')">👨‍👩‍👧 Profiles</button>
+ <button class="action" onclick="ashikaOpenFeature('previewPanel')">👁 Preview</button>
+ <button class="action" onclick="ashikaOpenFeature('statsPanel')">📊 Watch Stats</button>
+ <button class="action" onclick="ashikaOpenFeature('healthPanel')">🩺 Stream Health</button>
+ <button class="action" onclick="ashikaOpenFeature('ecosystemPanel')">🌐 Ashika Connect</button>
+</div>
+
+<div class="featurePanel" id="aiPanel">
+ <h3>🤖 Ashika AI TV Assistant</h3>
+ <p>Ask for channels by name, category or type. This local assistant does not require an AI API.</p>
+ <input id="aiQuestion" placeholder="Example: Find sports channels">
+ <button class="action" onclick="ashikaAskAI()">Ask Ashika</button>
+ <div class="featureResult" id="aiAnswer">Hello! I can help you find channels in your playlist.</div>
+ <button class="action" onclick="ashikaCloseFeatures()">Close</button>
+</div>
+
+<div class="featurePanel" id="remotePanel">
+ <h3>📱 QR Mobile Remote</h3>
+ <p>Generate a temporary pairing code for a future phone remote.</p>
+ <button class="action" onclick="ashikaCreatePair()">Generate Pairing Code</button>
+ <div class="featureResult" id="pairCode">No pairing code generated.</div>
+ <img id="qrImage" alt="Pairing QR code" style="display:none">
+ <p>Demo only: QR pairing does not yet control the TV. A secure realtime backend and mobile controller are required.</p>
+ <button class="action" onclick="ashikaCloseFeatures()">Close</button>
+</div>
+
+<div class="featurePanel" id="matchPanel">
+ <h3>⚽ Live Match Center</h3>
+ <p>Add match information manually. Automatic live scores require a sports data provider/API.</p>
+ <input id="matchTeams" placeholder="Teams (e.g. Bangladesh vs India)">
+ <input id="matchTime" placeholder="Match time / status">
+ <input id="matchScore" placeholder="Score (e.g. 1 - 0)">
+ <button class="action" onclick="ashikaAddMatch()">Add Match</button>
+ <div id="matchList" class="featureResult">No match information added.</div>
+ <button class="action" onclick="ashikaCloseFeatures()">Close</button>
+</div>
+
+<div class="featurePanel" id="familyPanel">
+ <h3>👨‍👩‍👧 Family Profiles</h3>
+ <p>Profiles keep separate favorites and recently watched lists on this TV/browser.</p>
+ <select id="familySelect" onchange="ashikaSwitchProfile(this.value)"></select>
+ <input id="newProfileName" placeholder="New profile name">
+ <button class="action" onclick="ashikaAddProfile()">＋ Add Profile</button>
+ <div class="featureResult" id="profileInfo"></div>
+ <button class="action" onclick="ashikaCloseFeatures()">Close</button>
+</div>
+
+<div class="featurePanel" id="previewPanel">
+ <h3>👁 Instant Channel Preview</h3>
+ <p>Focus a channel card to preview its name and details without starting another stream.</p>
+ <div class="previewBox" id="instantPreview">Select or focus a channel card to preview it.</div>
+ <button class="action" onclick="ashikaCloseFeatures()">Close</button>
+</div>
+
+<div class="featurePanel" id="statsPanel">
+ <h3>📊 Watch Statistics</h3>
+ <div id="watchStats" class="featureResult">No watch data yet.</div>
+ <button class="action" onclick="ashikaRenderStats()">Refresh Statistics</button>
+ <button class="action" onclick="ashikaCloseFeatures()">Close</button>
+</div>
+
+<div class="featurePanel" id="healthPanel">
+ <h3>🩺 Stream Health Checker</h3>
+ <p>Play a channel first, then check the player's current playback state.</p>
+ <button class="action" onclick="ashikaCheckHealth()">Check Current Stream</button>
+ <div id="healthResult" class="featureResult">No check performed.</div>
+ <p>Some providers block browser network checks. An unknown result does not necessarily mean the stream is offline.</p>
+ <button class="action" onclick="ashikaCloseFeatures()">Close</button>
+</div>
+
+<div class="featurePanel" id="ecosystemPanel">
+ <h3>🌐 Ashika Connect Ecosystem</h3>
+ <div class="featureGrid">
+  <div class="featureTile"><strong>📺 Ashika Live TV</strong><p>Current TV application</p></div>
+  <div class="featureTile"><strong>📱 Ashika Connect</strong><p>Mobile companion — backend required</p></div>
+  <div class="featureTile"><strong>🤖 Ashika AI</strong><p>Local channel helper; AI API integration pending</p></div>
+  <div class="featureTile"><strong>👨‍👩‍👧 Family</strong><p>Local family profiles</p></div>
+ </div>
+ <div class="featureResult">Cloud sync, real phone remote and shared accounts require Firebase or another secure backend.</div>
+ <button class="action" onclick="ashikaCloseFeatures()">Close</button>
+</div>
+
+</main>
+</div>
+<div class="modal" id="settings">
+<div class="modalbox">
+<h3>Playlist Settings</h3>
+<p>Enter an M3U playlist URL from a source you are authorized to use.</p>
+<input id="playlistUrl" placeholder="https://example.com/playlist.m3u">
+<button class="action" onclick="loadPlaylist()">Load Playlist</button>
+<button class="action" onclick="closeSettings()">Cancel</button>
+
+<div class="adminItem">
+ <strong>Upload M3U Playlist File</strong>
+ <input type="file" id="playlistFile" accept=".m3u,.m3u8,audio/x-mpegurl,application/vnd.apple.mpegurl" onchange="uploadPlaylistFile(event)">
+</div>
+<button class="action" onclick="renderPlaylistManager()">Manage Saved Playlists</button>
+<div id="playlistManager" class="adminList"></div>
+
+<p id="status"></p>
+</div>
+</div>
+
+<div class="modal" id="publicChannelModal">
+ <div class="modalbox">
+  <h3>＋ Add Your Channel</h3>
+  <input id="publicName" placeholder="Channel Name">
+  <input id="publicLogo" placeholder="Logo URL (optional)">
+  <input id="publicCategory" placeholder="Category (News, Sports, Music...)">
+  <input id="publicUrl" placeholder="Authorized Stream URL">
+  <button class="action" onclick="savePublicChannel()">Save Channel</button>
+  <button class="action" onclick="closePublicChannel()">Cancel</button>
+  <p id="publicChannelStatus"></p>
+ </div>
+</div>
+<div class="modal" id="adminPanel">
+<div class="modalbox">
+<h3>🛡 Ashika Admin Panel</h3>
+<div id="adminLogin">
+<p id="adminMessage">Enter your Admin PIN. First use: create a new PIN.</p>
+<input class="adminInput" id="adminPin" type="password" inputmode="numeric" placeholder="Admin PIN">
+<button class="action" onclick="adminLogin()">Continue</button>
+<button class="action" onclick="closeAdmin()">Close</button>
+</div>
+<div id="adminDashboard" style="display:none">
+<h4>Channel Management</h4>
+<input class="adminInput" id="adminName" placeholder="Channel name">
+<input class="adminInput" id="adminLogo" placeholder="Logo URL (optional)">
+<input class="adminInput" id="adminCategory" placeholder="Category (News, Sports...)">
+<input class="adminInput" id="adminUrl" placeholder="Stream URL">
+<button class="action" onclick="saveAdminChannel()">Save Channel</button>
+<button class="action" onclick="clearAdminForm()">Clear</button>
+<div class="adminList" id="adminChannelList"></div>
+<hr>
+<h4>M3U Playlist Management</h4>
+<p>Add one playlist URL per line. Use only streams you are authorized to use.</p>
+<textarea class="adminInput" id="adminPlaylists" rows="4" placeholder="https://example.com/playlist.m3u"></textarea>
+<button class="action" onclick="saveAdminPlaylists()">Save Playlist URLs</button>
+<button class="action" onclick="refreshAdminPlaylists()">Refresh All Playlists</button>
+<p id="adminStatus"></p>
+<button class="action" onclick="adminLogout()">Log Out</button>
+<button class="action" onclick="closeAdmin()">Close</button>
+</div>
+</div>
+</div>
+<script>
+/* ASHIKA_RUNTIME_ERROR_DETECTOR */
+window.onerror = function(message, source, line, column, error) {
+    var box = document.getElementById('ashikaRuntimeError');
+    if (!box) {
+        box = document.createElement('div');
+        box.id = 'ashikaRuntimeError';
+        box.style.cssText = 'position:fixed;z-index:100000;top:10px;left:10px;right:10px;background:#7b1020;color:white;padding:16px;border:2px solid #ff6688;border-radius:10px;font-size:16px;white-space:pre-wrap;overflow-wrap:anywhere;';
+        document.body.appendChild(box);
+    }
+    box.textContent = 'ASHIKA JAVASCRIPT ERROR: ' + message + ' | Line: ' + line + ' | Column: ' + column;
+    return false;
+};
+
+let channels=JSON.parse(localStorage.getItem('ashika_channels')||'[]');
+let adminEditIndex=-1;
+let currentChannelUrl='';
+let category='All';
+let page='all';
+let favorites=JSON.parse(localStorage.getItem('ashika_favs')||'[]');
+let recent=JSON.parse(localStorage.getItem('ashika_recent')||'[]');
+
+function toggleMenu(){
+ const s=document.getElementById('sidebar');
+ s.style.display=s.style.display==='block'?'none':'block';
+}
+function setCategory(c,b){
+ category=c;
+ document.querySelectorAll('.categories button').forEach(x=>x.classList.remove('active'));
+ b.classList.add('active');
+ render();
+}
+function showPage(p,b){
+ page=p;
+ document.querySelectorAll('aside button').forEach(x=>x.classList.remove('active'));
+ b.classList.add('active');
+ document.getElementById('heading').textContent=
+ p==='home'?'Home':p==='favorites'?'My Favorites':p==='recent'?'Recently Watched':'All Channels';
+ render();
+}
+function render(){
+ let q=document.getElementById('search').value.toLowerCase();
+ let list=channels.filter(c=>
+ (page!=='favorites'||favorites.includes(c.name))&&
+ (page!=='recent'||recent.includes(c.name))&&
+ (category==='All'||c.group.toLowerCase().includes(category.toLowerCase()))&&
+ c.name.toLowerCase().includes(q));
+ document.getElementById('count').textContent=list.length+' Channels';
+ let box=document.getElementById('channels');
+ box.innerHTML='';
+ if(!list.length){
+ box.innerHTML='<div class="empty">No channels found.<br><br>Add your authorized M3U playlist from Settings.</div>';
+ return;
+ }
+ list.forEach(c=>{
+ let d=document.createElement('div');
+ d.className='channel'; d.tabIndex=0; d.setAttribute('role','button');
+ let heart=favorites.includes(c.name)?'♥':'♡';
+ d.innerHTML='<span class="heart">'+heart+'</span><div class="symbol">📺</div><strong></strong><small></small>';
+ d.querySelector('strong').textContent=c.name;
+ d.querySelector('small').textContent=c.group;
+ d.onclick=()=>playChannel(c);
+
+ let edit=document.createElement('button');
+ edit.className='action';
+ edit.textContent='Edit';
+ edit.onclick=e=>{
+  e.stopPropagation();
+  editPublicChannel(c);
+ };
+
+ let del=document.createElement('button');
+ del.className='action';
+ del.textContent='Delete';
+ del.onclick=e=>{
+  e.stopPropagation();
+  deletePublicChannel(c);
+ };
+
+ d.append(edit,del);
+ d.querySelector('.heart').onclick=e=>{
+ e.stopPropagation();
+ favorites=favorites.includes(c.name)?favorites.filter(x=>x!==c.name):[...favorites,c.name];
+ localStorage.setItem('ashika_favs',JSON.stringify(favorites));
+ render();
+ };
+ box.appendChild(d);
+ });
+}
+function playChannel(c){
+ let p=document.getElementById('player');
+ currentChannelUrl=c.url;
+ p.src=c.url;
+ document.getElementById('playingName').textContent=c.name;
+ document.getElementById('playerBox').style.display='block';
+ renderPlayerChannels();
+ showChannelList();
+ p.play().catch(()=>{});
+ recent=[c.name,...recent.filter(x=>x!==c.name)].slice(0,30);
+ localStorage.setItem('ashika_recent',JSON.stringify(recent));
+}
+function renderPlayerChannels(){
+ let box=document.getElementById('playerChannelList');
+ if(!box)return;
+ box.innerHTML='';
+ channels.forEach((c,i)=>{
+  let b=document.createElement('button');
+  b.className='playerChannel'+(c.url===currentChannelUrl?' active':'');
+  b.textContent=(i+1)+'. '+c.name;
+  b.onclick=()=>playChannel(c);
+  box.appendChild(b);
+ });
+}
+function changeChannel(step){
+ if(!channels.length)return;
+ let index=channels.findIndex(c=>c.url===currentChannelUrl);
+ if(index<0)index=0;
+ index=(index+step+channels.length)%channels.length;
+ playChannel(channels[index]);
+}
+let channelHideTimer=null;
+function showChannelList(){
+ let layout=document.querySelector('.playerLayout');
+ if(!layout)return;
+ layout.classList.remove('channels-hidden');
+ clearTimeout(channelHideTimer);
+ channelHideTimer=setTimeout(()=>layout.classList.add('channels-hidden'),5000);
+}
+function scheduleChannelHide(){
+ clearTimeout(channelHideTimer);
+ channelHideTimer=setTimeout(()=>{
+  let layout=document.querySelector('.playerLayout');
+  if(layout)layout.classList.add('channels-hidden');
+ },5000);
+}
+function toggleChannelList(){
+ let layout=document.querySelector('.playerLayout');
+ if(!layout)return;
+ if(layout.classList.contains('channels-hidden'))showChannelList();
+ else{clearTimeout(channelHideTimer);layout.classList.add('channels-hidden');}
+}
+function stopPlayer(){
+ let p=document.getElementById('player');
+ p.pause();p.removeAttribute('src');p.load();
+}
+function fullscreen(){
+ let p=document.getElementById('player');
+ if(p.requestFullscreen)p.requestFullscreen();
+}
+function openSettings(){document.getElementById('settings').style.display='flex'}
+function closeSettings(){document.getElementById('settings').style.display='none'}
+async function loadPlaylist(urlOverride){
+ let url=(urlOverride || document.getElementById('playlistUrl').value).trim();
+ let status=document.getElementById('status');
+ if(!url){status.textContent='Please enter a playlist URL.';return}
+ status.textContent='Loading playlist...';
+ try{
+ let response=await fetch(url);
+ if(!response.ok)throw new Error('HTTP '+response.status);
+ let data=await response.text();
+ let lines=data.split(/\r?\n/);
+ let next=[],name='',group='Other';
+ for(let line of lines){
+ line=line.trim();
+ if(line.startsWith('#EXTINF')){
+ name=(line.split(',').pop()||'Unknown Channel').trim();
+ let match=line.match(/group-title="([^"]+)"/i);
+ group=match?match[1]:'Other';
+ }else if(line&&!line.startsWith('#')&&name){
+ next.push({name,group,url:line});
+ name='';
+ }
+ }
+ if(!next.length)throw new Error('No channels found in playlist');
+ channels=[...channels,...next];
+ localStorage.setItem('ashika_channels',JSON.stringify(channels));
+ let seen=new Set();
+ channels=channels.filter(c=>{
+  if(seen.has(c.url))return false;
+  seen.add(c.url);
+  return true;
+ });
+ localStorage.setItem('ashika_playlist',url);
+ let savedPlaylists=JSON.parse(localStorage.getItem('ashika_playlists')||'[]');
+ if(!savedPlaylists.includes(url)){
+  savedPlaylists.push(url);
+  localStorage.setItem('ashika_playlists',JSON.stringify(savedPlaylists));
+ }
+ status.textContent=next.length+' channels loaded!';
+ closeSettings();render();
+ }catch(e){status.textContent='Could not load playlist: '+e.message}
+}
+
+function openAdmin(){
+ document.getElementById('adminPanel').style.display='flex';
+ document.getElementById('adminLogin').style.display='block';
+ document.getElementById('adminDashboard').style.display='none';
+ document.getElementById('adminPin').value='';
+ document.getElementById('adminMessage').textContent=
+ localStorage.getItem('ashika_admin_pin')?'Enter your Admin PIN.':'First use: create your Admin PIN.';
+}
+function closeAdmin(){document.getElementById('adminPanel').style.display='none'}
+function adminLogin(){
+ let pin=document.getElementById('adminPin').value.trim();
+ if(pin.length<4){alert('PIN must be at least 4 characters.');return}
+ let saved=localStorage.getItem('ashika_admin_pin');
+ if(!saved){
+  localStorage.setItem('ashika_admin_pin',pin);
+  alert('Admin PIN created. Keep it safe.');
+ }else if(pin!==saved){
+  alert('Incorrect PIN.');return;
+ }
+ document.getElementById('adminLogin').style.display='none';
+ document.getElementById('adminDashboard').style.display='block';
+ document.getElementById('adminPlaylists').value=
+ (JSON.parse(localStorage.getItem('ashika_playlists')||'[]')).join('\n');
+ renderAdminChannels();
+}
+function adminLogout(){
+ document.getElementById('adminDashboard').style.display='none';
+ document.getElementById('adminLogin').style.display='block';
+ document.getElementById('adminPin').value='';
+}
+function clearAdminForm(){
+ adminEditIndex=-1;
+ ['adminName','adminLogo','adminCategory','adminUrl'].forEach(id=>document.getElementById(id).value='');
+}
+function saveAdminChannel(){
+ let name=document.getElementById('adminName').value.trim();
+ let logo=document.getElementById('adminLogo').value.trim();
+ let group=document.getElementById('adminCategory').value.trim()||'Other';
+ let url=document.getElementById('adminUrl').value.trim();
+ if(!name||!url){alert('Channel name and Stream URL are required.');return}
+ let item={name,logo,group,url};
+ if(adminEditIndex>=0) channels[adminEditIndex]=item;
+ else channels.push(item);
+ localStorage.setItem('ashika_channels',JSON.stringify(channels));
+ clearAdminForm();renderAdminChannels();render();
+ document.getElementById('adminStatus').textContent='Channel saved.';
+}
+function renderAdminChannels(){
+ let box=document.getElementById('adminChannelList');
+ box.innerHTML='';
+ channels.forEach((c,i)=>{
+  let row=document.createElement('div');row.className='adminItem';
+  let label=document.createElement('span');label.textContent=c.name+' — '+c.group;
+  let edit=document.createElement('button');edit.className='action';edit.textContent='Edit';
+  edit.onclick=()=>{
+   adminEditIndex=i;
+   document.getElementById('adminName').value=c.name;
+   document.getElementById('adminLogo').value=c.logo||'';
+   document.getElementById('adminCategory').value=c.group||'Other';
+   document.getElementById('adminUrl').value=c.url;
+  };
+  let del=document.createElement('button');del.className='action';del.textContent='Delete';
+  del.onclick=()=>{
+   if(!confirm('Delete '+c.name+'?'))return;
+   channels.splice(i,1);
+   localStorage.setItem('ashika_channels',JSON.stringify(channels));
+   renderAdminChannels();render();
+  };
+  row.append(label,edit,del);box.appendChild(row);
+ });
+}
+function saveAdminPlaylists(){
+ let urls=document.getElementById('adminPlaylists').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+ localStorage.setItem('ashika_playlists',JSON.stringify([...new Set(urls)]));
+ document.getElementById('adminStatus').textContent=urls.length+' playlist URL(s) saved.';
+}
+async function refreshAdminPlaylists(){
+ saveAdminPlaylists();
+ let urls=JSON.parse(localStorage.getItem('ashika_playlists')||'[]');
+ let status=document.getElementById('adminStatus');
+ if(!urls.length){status.textContent='Add playlist URLs first.';return}
+ status.textContent='Refreshing playlists...';
+ for(let url of urls) await loadPlaylist(url);
+ status.textContent='Playlist refresh finished. Check channel list for loaded channels.';
+ renderAdminChannels();
+}
+
+
+function openToffee(){
+ const url="https://toffeelive.com";
+ window.location.href=url;
+}
+
+
+function openPublicChannel(){
+ document.getElementById('publicChannelModal').style.display='flex';
+ document.getElementById('publicChannelStatus').textContent='';
+}
+function closePublicChannel(){
+ document.getElementById('publicChannelModal').style.display='none';
+}
+function savePublicChannel(){
+ const name=document.getElementById('publicName').value.trim();
+ const logo=document.getElementById('publicLogo').value.trim();
+ const group=document.getElementById('publicCategory').value.trim()||'Other';
+ const url=document.getElementById('publicUrl').value.trim();
+ const status=document.getElementById('publicChannelStatus');
+
+ if(!name||!url){
+  status.textContent='Channel name and stream URL are required.';
+  return;
+ }
+ if(!/^https?:\/\//i.test(url)){
+  status.textContent='Please enter a valid HTTP or HTTPS stream URL.';
+  return;
+ }
+
+ if(channels.some(c=>c.url===url)){
+  status.textContent='This channel URL already exists.';
+  return;
+ }
+
+ channels.push({name,logo,group,url});
+ localStorage.setItem('ashika_channels',JSON.stringify(channels));
+
+ ['publicName','publicLogo','publicCategory','publicUrl'].forEach(id=>{
+  document.getElementById(id).value='';
+ });
+ render();
+ renderPlayerChannels();
+ status.textContent='Channel added successfully!';
+}
+
+function renderPlaylistManager(){
+ const box=document.getElementById('playlistManager');
+ if(!box)return;
+ box.innerHTML='';
+ const urls=JSON.parse(localStorage.getItem('ashika_playlists')||'[]');
+
+ if(!urls.length){
+  box.textContent='No saved playlists.';
+  return;
+ }
+
+ urls.forEach((url,index)=>{
+  const row=document.createElement('div');
+  row.className='adminItem';
+
+  const label=document.createElement('span');
+  label.textContent='Playlist '+(index+1)+': '+url;
+  label.style.wordBreak='break-all';
+
+  const refresh=document.createElement('button');
+  refresh.className='action';
+  refresh.textContent='Refresh';
+  refresh.onclick=()=>loadPlaylist(url);
+
+  const remove=document.createElement('button');
+  remove.className='action';
+  remove.textContent='Remove';
+  remove.onclick=()=>{
+   if(!confirm('Remove this saved playlist?'))return;
+   const current=JSON.parse(localStorage.getItem('ashika_playlists')||'[]');
+   current.splice(index,1);
+   localStorage.setItem('ashika_playlists',JSON.stringify(current));
+   renderPlaylistManager();
+  };
+
+  row.append(label,refresh,remove);
+  box.appendChild(row);
+ });
+}
+
+
+function editPublicChannel(channel){
+ const index=channels.findIndex(c=>c.url===channel.url);
+ if(index<0)return;
+
+ const name=prompt('Channel name:',channel.name);
+ if(name===null)return;
+ const url=prompt('Stream URL:',channel.url);
+ if(url===null)return;
+ const group=prompt('Category:',channel.group||'Other');
+ if(group===null)return;
+ const logo=prompt('Logo URL:',channel.logo||'');
+ if(logo===null)return;
+
+ if(!name.trim()||!/^https?:\/\//i.test(url.trim())){
+  alert('Please enter a channel name and valid HTTP/HTTPS URL.');
+  return;
+ }
+
+ if(channels.some((c,i)=>i!==index&&c.url===url.trim())){
+  alert('This stream URL already exists.');
+  return;
+ }
+
+ channels[index]={...channels[index],name:name.trim(),url:url.trim(),group:group.trim()||'Other',logo:logo.trim()};
+ localStorage.setItem('ashika_channels',JSON.stringify(channels));
+ render();
+ renderPlayerChannels();
+}
+
+function deletePublicChannel(channel){
+ if(!confirm('Delete '+channel.name+'?'))return;
+ channels=channels.filter(c=>c.url!==channel.url);
+ localStorage.setItem('ashika_channels',JSON.stringify(channels));
+ render();
+ renderPlayerChannels();
+}
+
+
+function uploadPlaylistFile(event){
+ const file=event.target.files && event.target.files[0];
+ if(!file)return;
+
+ const reader=new FileReader();
+
+ reader.onload=function(){
+  const lines=String(reader.result||'').split(/\r?\n/);
+  let name='',group='Other',logo='';
+  let added=0, skipped=0;
+
+  for(let line of lines){
+   line=line.trim();
+
+   if(line.startsWith('#EXTINF')){
+    const comma=line.lastIndexOf(',');
+    name=comma>=0?line.substring(comma+1).trim():'Unknown Channel';
+
+    const groupMatch=line.match(/group-title="([^"]*)"/i);
+    const logoMatch=line.match(/tvg-logo="([^"]*)"/i);
+
+    group=groupMatch?groupMatch[1]:'Other';
+    logo=logoMatch?logoMatch[1]:'';
+
+   }else if(line && !line.startsWith('#') && name){
+    if(/^https?:\/\//i.test(line) && !channels.some(c=>c.url===line)){
+     channels.push({name,group,logo,url:line});
+     added++;
+    }else{
+     skipped++;
+    }
+    name='';
+    group='Other';
+    logo='';
+   }
+  }
+
+  localStorage.setItem('ashika_channels',JSON.stringify(channels));
+  render();
+  renderPlayerChannels();
+
+  alert(added+' channel(s) imported. '+skipped+' skipped.');
+  event.target.value='';
+ };
+
+ reader.onerror=function(){
+  alert('Could not read the selected playlist file.');
+ };
+
+ reader.readAsText(file);
+}
+
+function showAbout(){alert('Ashika Live TV\\nVersion 1.0.0\\nFree and authorized streams only.')}
+document.addEventListener('keydown',e=>{
+ if(e.key==='Escape')stopPlayer();
+});
+render();
+const ashikaPlaylist="https://github.com/abusaeeidx/Mrgify-BDIX-IPTV/raw/main/playlist.m3u";
+let savedPlaylists=JSON.parse(localStorage.getItem('ashika_playlists')||'[]');
+if(!savedPlaylists.includes(ashikaPlaylist)) savedPlaylists.push(ashikaPlaylist);
+localStorage.setItem('ashika_playlists',JSON.stringify(savedPlaylists));
+savedPlaylists.forEach(url=>loadPlaylist(url));
+
+// LG webOS TV remote navigation
+document.addEventListener('keydown',function(e){
+ const keys=['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'];
+ if(!keys.includes(e.key)) return;
+
+ const items=[...document.querySelectorAll(
+  'button:not([disabled]),input:not([disabled]),.channel'
+ )].filter(el=>el.getClientRects().length);
+
+ const current=document.activeElement;
+ if(!items.includes(current)){
+  e.preventDefault();
+  if(items.length) items[0].focus();
+  return;
+ }
+
+ const a=current.getBoundingClientRect();
+ const ac={x:a.left+a.width/2,y:a.top+a.height/2};
+ let best=null,score=Infinity;
+
+ items.forEach(el=>{
+  if(el===current)return;
+  const r=el.getBoundingClientRect();
+  const x=r.left+r.width/2-ac.x;
+  const y=r.top+r.height/2-ac.y;
+  let primary,secondary;
+  if(e.key==='ArrowRight'){primary=x;secondary=Math.abs(y)}
+  if(e.key==='ArrowLeft'){primary=-x;secondary=Math.abs(y)}
+  if(e.key==='ArrowDown'){primary=y;secondary=Math.abs(x)}
+  if(e.key==='ArrowUp'){primary=-y;secondary=Math.abs(x)}
+  if(primary>0){
+   const value=primary+secondary*2;
+   if(value<score){score=value;best=el}
+  }
+ });
+ if(best){
+  e.preventDefault();
+  best.focus();
+  best.scrollIntoView({block:'nearest',inline:'nearest'});
+ }
+});
+
+document.addEventListener('keydown',function(e){
+ if(e.key==='Enter'){
+  const el=document.activeElement;
+  if(el && el.classList.contains('channel')){
+   e.preventDefault();
+   el.click();
+  }
+ }
+});
+
+
+/* ASHIKA_ALL_FEATURES_V2 */
+
+// Feature panels
+function ashikaOpenFeature(id){
+ document.querySelectorAll('.featurePanel').forEach(p=>p.style.display='none');
+ const panel=document.getElementById(id);
+ if(panel)panel.style.display='block';
+ if(id==='familyPanel')ashikaRenderProfiles();
+ if(id==='statsPanel')ashikaRenderStats();
+ if(id==='matchPanel')ashikaRenderMatches();
+}
+function ashikaCloseFeatures(){
+ document.querySelectorAll('.featurePanel').forEach(p=>p.style.display='none');
+}
+
+// Local channel assistant (no external AI service)
+function ashikaAskAI(){
+ const q=(document.getElementById('aiQuestion').value||'').trim().toLowerCase();
+ const out=document.getElementById('aiAnswer');
+ if(!q){out.textContent='Please type what you want to watch.';return}
+ const words=q.split(/\s+/).filter(w=>w.length>2);
+ let found=channels.filter(c=>{
+  const text=((c.name||'')+' '+(c.group||'')).toLowerCase();
+  return words.some(w=>text.includes(w));
+ });
+ if(!found.length && /sport|football|cricket|match/.test(q)){
+  found=channels.filter(c=>/sport|cricket|football/i.test((c.group||'')+' '+(c.name||'')));
+ }
+ if(!found.length && /news/.test(q)){
+  found=channels.filter(c=>/news/i.test((c.group||'')+' '+(c.name||'')));
+ }
+ out.textContent=found.length
+  ?'I found '+found.length+' matching channel(s):\n'+found.slice(0,12).map(c=>'• '+c.name+' ('+(c.group||'Other')+')').join('\n')
+  :'No matching channel found. Add a playlist or try a channel category.';
+}
+
+// Temporary QR pairing demonstration; not a connected remote
+function ashikaCreatePair(){
+ const code=String(Math.floor(100000+Math.random()*900000));
+ localStorage.setItem('ashika_pair_demo',code);
+ document.getElementById('pairCode').textContent='Temporary demo code: '+code;
+ const img=document.getElementById('qrImage');
+ const payload='Ashika Live TV demo pairing code: '+code;
+ img.src='https://api.qrserver.com/v1/create-qr-code/?size=190x190&data='+encodeURIComponent(payload);
+ img.style.display='block';
+}
+
+// Manual match board
+function ashikaRenderMatches(){
+ const list=JSON.parse(localStorage.getItem('ashika_matches')||'[]');
+ const box=document.getElementById('matchList');
+ box.innerHTML='';
+ if(!list.length){box.textContent='No match information added.';return}
+ list.forEach((m,i)=>{
+  const row=document.createElement('div');
+  row.className='adminItem';
+  const label=document.createElement('span');
+  label.textContent=m.teams+' | '+m.score+' | '+m.time;
+  const del=document.createElement('button');
+  del.className='action';del.textContent='Delete';
+  del.onclick=()=>{
+   const now=JSON.parse(localStorage.getItem('ashika_matches')||'[]');
+   now.splice(i,1);localStorage.setItem('ashika_matches',JSON.stringify(now));
+   ashikaRenderMatches();
+  };
+  row.append(label,del);box.appendChild(row);
+ });
+}
+function ashikaAddMatch(){
+ const teams=document.getElementById('matchTeams').value.trim();
+ const time=document.getElementById('matchTime').value.trim();
+ const score=document.getElementById('matchScore').value.trim();
+ if(!teams){alert('Enter the team names first.');return}
+ const list=JSON.parse(localStorage.getItem('ashika_matches')||'[]');
+ list.unshift({teams,time:time||'Not set',score:score||'Not set'});
+ localStorage.setItem('ashika_matches',JSON.stringify(list.slice(0,30)));
+ ['matchTeams','matchTime','matchScore'].forEach(id=>document.getElementById(id).value='');
+ ashikaRenderMatches();
+}
+
+// Family profiles, stored locally on this device
+let ashikaProfiles=JSON.parse(localStorage.getItem('ashika_profiles')||'null');
+let ashikaActiveProfile=localStorage.getItem('ashika_active_profile')||'Default';
+if(!Array.isArray(ashikaProfiles)||!ashikaProfiles.length){
+ ashikaProfiles=[{name:'Default',favorites:[...favorites],recent:[...recent]}];
+ localStorage.setItem('ashika_profiles',JSON.stringify(ashikaProfiles));
+}
+function ashikaSaveActiveProfile(){
+ let item=ashikaProfiles.find(p=>p.name===ashikaActiveProfile);
+ if(item){item.favorites=[...favorites];item.recent=[...recent]}
+ localStorage.setItem('ashika_profiles',JSON.stringify(ashikaProfiles));
+ localStorage.setItem('ashika_favs',JSON.stringify(favorites));
+ localStorage.setItem('ashika_recent',JSON.stringify(recent));
+}
+function ashikaRenderProfiles(){
+ const select=document.getElementById('familySelect');
+ select.innerHTML='';
+ ashikaProfiles.forEach(p=>{
+  const option=document.createElement('option');
+  option.value=p.name;option.textContent=p.name;
+  select.appendChild(option);
+ });
+ select.value=ashikaActiveProfile;
+ const info=document.getElementById('profileInfo');
+ info.textContent='Active profile: '+ashikaActiveProfile+' | Favorites: '+favorites.length+' | Recently watched: '+recent.length;
+}
+function ashikaSwitchProfile(name){
+ ashikaSaveActiveProfile();
+ const item=ashikaProfiles.find(p=>p.name===name);
+ if(!item)return;
+ ashikaActiveProfile=name;
+ favorites=[...(item.favorites||[])];
+ recent=[...(item.recent||[])];
+ localStorage.setItem('ashika_active_profile',name);
+ localStorage.setItem('ashika_favs',JSON.stringify(favorites));
+ localStorage.setItem('ashika_recent',JSON.stringify(recent));
+ ashikaRenderProfiles();render();
+}
+function ashikaAddProfile(){
+ const input=document.getElementById('newProfileName');
+ const name=input.value.trim();
+ if(!name){alert('Enter a profile name.');return}
+ if(ashikaProfiles.some(p=>p.name.toLowerCase()===name.toLowerCase())){
+  alert('That profile already exists.');return;
+ }
+ ashikaSaveActiveProfile();
+ ashikaProfiles.push({name,favorites:[],recent:[]});
+ localStorage.setItem('ashika_profiles',JSON.stringify(ashikaProfiles));
+ input.value='';
+ ashikaSwitchProfile(name);
+}
+
+// Watch statistics: counts actual video playback time
+let ashikaLastStatTime=0;
+function ashikaSaveWatchTime(seconds){
+ if(!Number.isFinite(seconds)||seconds<=0||seconds>60)return;
+ const name=document.getElementById('playingName').textContent||'Unknown';
+ const stats=JSON.parse(localStorage.getItem('ashika_watch_stats')||'{}');
+ stats[name]=(stats[name]||0)+seconds;
+ localStorage.setItem('ashika_watch_stats',JSON.stringify(stats));
+}
+const ashikaVideo=document.getElementById('player');
+if(ashikaVideo){
+ ashikaVideo.addEventListener('play',()=>{ashikaLastStatTime=Date.now()});
+ ashikaVideo.addEventListener('timeupdate',()=>{
+  if(!ashikaVideo.paused){
+   const now=Date.now();
+   if(ashikaLastStatTime){
+    const delta=(now-ashikaLastStatTime)/1000;
+    if(delta>=10){ashikaSaveWatchTime(delta);ashikaLastStatTime=now}
+   }else ashikaLastStatTime=now;
+  }
+ });
+ ashikaVideo.addEventListener('pause',()=>{
+  if(ashikaLastStatTime){
+   ashikaSaveWatchTime((Date.now()-ashikaLastStatTime)/1000);
+   ashikaLastStatTime=0;
+  }
+ });
+}
+function ashikaRenderStats(){
+ const stats=JSON.parse(localStorage.getItem('ashika_watch_stats')||'{}');
+ const entries=Object.entries(stats).sort((a,b)=>b[1]-a[1]);
+ const total=entries.reduce((sum,x)=>sum+x[1],0);
+ const fmt=s=>Math.floor(s/60)+' min '+Math.floor(s%60)+' sec';
+ document.getElementById('watchStats').textContent=
+  'Total watch time: '+fmt(total)+'\n'+
+  (entries.length?entries.slice(0,15).map((x,i)=>(i+1)+'. '+x[0]+' — '+fmt(x[1])).join('\n'):'No watch data recorded yet.');
+}
+
+// Stream status from the actual HTML video element
+function ashikaCheckHealth(){
+ const v=document.getElementById('player');
+ const out=document.getElementById('healthResult');
+ if(!currentChannelUrl){out.textContent='Play a channel first.';return}
+ const states=['NETWORK_EMPTY','NETWORK_IDLE','NETWORK_LOADING','NETWORK_NO_SOURCE'];
+ const network=states[v.networkState]||'Unknown';
+ let result='Channel: '+(document.getElementById('playingName').textContent||'Unknown')+
+  '\nNetwork state: '+network+
+  '\nReady state: '+v.readyState+
+  '\n';
+ if(v.error)result+='Player error code: '+v.error.code+' (stream may be unavailable or unsupported).';
+ else if(v.readyState>=3)result+='Playback data is available. Stream appears healthy.';
+ else if(v.readyState===0)result+='No media data yet. The stream may be loading, blocked or unsupported.';
+ else result+='Stream is loading. Wait a moment and check again.';
+ out.textContent=result;
+}
+
+// Channel card focus preview without opening another stream
+document.getElementById('channels').addEventListener('focusin',e=>{
+ const card=e.target.closest('.channel');
+ if(!card)return;
+ const name=(card.querySelector('strong') && card.querySelector('strong').textContent)||'Channel';
+ const group=(card.querySelector('small') && card.querySelector('small').textContent)||'Other';
+ const box=document.getElementById('instantPreview');
+ box.style.display='block';
+ box.textContent='Preview: '+name+' | Category: '+group+' | Press OK/Enter to play.';
+});
+
+
+// Ashika Phone-to-TV Playlist Sync
+async function ashikaSyncPhonePlaylist(){
+ try{
+  var response = await fetch('http://192.168.0.103:8080/api/channels');
+  if(!response.ok) return;
+
+  var data = await response.json();
+  if(!data || !data.updatedAt || !Array.isArray(data.channels) || !data.channels.length) return;
+
+  var lastUpdate = Number(localStorage.getItem('ashika_phone_playlist_updated') || 0);
+  if(Number(data.updatedAt) === lastUpdate) return;
+
+  var incoming = data.channels.filter(function(c){
+   return c && c.name && c.url && /^https?:\/\//i.test(c.url);
+  }).map(function(c){
+   return {
+    name: c.name,
+    group: c.group || 'Other',
+    logo: c.logo || '',
+    url: c.url,
+    source: 'phone'
+   };
+  });
+
+  channels = channels.filter(function(c){
+   return c.source !== 'phone';
+  });
+
+  incoming.forEach(function(item){
+   var exists = channels.some(function(c){ return c.url === item.url; });
+   if(!exists) channels.push(item);
+  });
+
+  localStorage.setItem('ashika_channels', JSON.stringify(channels));
+  localStorage.setItem('ashika_phone_playlist_updated', String(data.updatedAt));
+
+  render();
+  renderPlayerChannels();
+  console.log('Ashika Phone Sync: ' + incoming.length + ' channels received.');
+ }catch(error){
+  console.log('Ashika Phone Sync unavailable: ' + error.message);
+ }
+}
+
+// Startup animation
+window.addEventListener('load',()=>{
+ const splash=document.getElementById('ashikaSplash');
+ if(splash){
+  setTimeout(()=>{
+   splash.style.opacity='0';
+   setTimeout(()=>splash.remove(),550);
+  },1800);
+ }
+ ashikaRenderProfiles();
+ ashikaSyncPhonePlaylist();
+ setInterval(ashikaSyncPhonePlaylist, 10000);
+});
+window.addEventListener('beforeunload',ashikaSaveActiveProfile);
+
+</script>
+</body>
+</html>

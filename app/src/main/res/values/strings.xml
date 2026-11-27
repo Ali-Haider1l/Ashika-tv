@@ -1,0 +1,30 @@
+<resources>
+    <string name="app_name">Ashika Live TV</string>
+    <string name="tagline">Your entertainment starts here</string>
+    <string name="live_badge">LIVE</string>
+    <string name="hero_title">Welcome to Ashika Live TV</string>
+    <string name="hero_subtitle">Watch your favourite live channels in one place.</string>
+    <string name="add_playlist">Add Playlist</string>
+    <string name="add_channel">Add Channel</string>
+    <string name="search_channels_hint">Search channels…</string>
+    <string name="empty_channels_title">No channels found</string>
+    <string name="empty_channels_subtitle">Load an authorized M3U playlist URL, import an .m3u file, or add a channel manually.</string>
+    <string name="nav_channels">Channels</string>
+    <string name="nav_favorites">Favorites</string>
+    <string name="nav_recent">Recent</string>
+    <string name="nav_tools">Tools</string>
+    <string name="nav_playlists">Playlists</string>
+    <string name="nav_admin">Admin</string>
+    <string name="cd_favorite_toggle">Toggle favorite</string>
+    <string name="cd_channel_logo">Channel logo</string>
+    <string name="cd_more_options">Channel options</string>
+    <string name="cd_play_pause">Play or pause</string>
+    <string name="cd_previous_channel">Previous channel</string>
+    <string name="cd_next_channel">Next channel</string>
+    <string name="cd_fullscreen">Toggle fullscreen</string>
+    <string name="cd_stop_player">Stop playback</string>
+    <string name="cd_channel_drawer">Toggle player channel list</string>
+    <string name="cd_close">Close</string>
+    <string name="cd_profile_switcher">Switch family profile</string>
+    <string name="cd_qr_code">Pairing QR code</string>
+</resources>

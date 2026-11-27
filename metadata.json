@@ -1,0 +1,6 @@
+{
+  "name": "Ashika Live TV",
+  "description": "Live IPTV channel player with M3U playlist import, family profiles, watch statistics, and stream health diagnostics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
