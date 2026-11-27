@@ -239,25 +239,33 @@ fun DockedLivePlayer(
                             )
                         }
 
-                        // Fullscreen quick-toggle button overlaid on the video surface
+                        // Clearly labelled fullscreen action, always visible over the video.
                         Surface(
-                            shape = CircleShape,
-                            color = ObsidianNight.copy(alpha = 0.74f),
-                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.24f)),
+                            shape = RoundedCornerShape(24.dp),
+                            color = ObsidianNight.copy(alpha = 0.88f),
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.32f)),
                             modifier = Modifier
                                 .align(Alignment.BottomEnd)
-                                .padding(8.dp)
+                                .padding(10.dp)
+                                .testTag("player_video_fullscreen_button")
+                                .clickable(onClick = onEnterFullscreen)
                         ) {
-                            IconButton(
-                                onClick = onEnterFullscreen,
-                                modifier = Modifier
-                                    .minimumInteractiveComponentSize()
-                                    .testTag("player_video_fullscreen_button")
+                            Row(
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(7.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Rounded.Fullscreen,
                                     contentDescription = stringResource(R.string.cd_fullscreen),
-                                    tint = Color.White
+                                    tint = Color.White,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Text(
+                                    text = stringResource(R.string.action_fullscreen),
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.SemiBold
                                 )
                             }
                         }
