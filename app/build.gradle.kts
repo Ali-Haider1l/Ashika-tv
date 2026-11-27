@@ -16,8 +16,8 @@ android {
     applicationId = "com.aistudio.ashikatv.rmtvyq"
     minSdk = 24
     targetSdk = 36
-    versionCode = 9
-    versionName = "6.2.1" // Release train 6.2.1 - workflow tag fix
+    versionCode = 10
+    versionName = "6.3.0" // Major feature and installer validation release
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
