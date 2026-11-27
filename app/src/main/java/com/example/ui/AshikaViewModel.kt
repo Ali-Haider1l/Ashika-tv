@@ -137,7 +137,7 @@ private data class LocalControlsState(
 class AshikaViewModel(
     private val appContext: Context,
     private val repository: AshikaRepository,
-    private val cloudSyncRepository: CloudSyncRepository,
+    private val cloudSyncRepository: CloudSyncRepository?,
     val currentUserId: String,
     val userDisplayName: String = "",
     val userEmail: String = ""
@@ -303,32 +303,34 @@ class AshikaViewModel(
         EpgSnapshot(epgChannels, epgPrograms, epgUrl, updatedAt)
     }
 
-    private val cloudSyncState: StateFlow<CloudSyncUiState> = combine(
-        cloudSyncRepository.observeFavorites(currentUserId),
-        cloudSyncRepository.observeCustomChannels(currentUserId),
-        cloudSyncRepository.observePlaylists(currentUserId)
-    ) { favs, customChannels, playlists ->
-        repository.applyCloudCustomChannels(customChannels)
-        repository.applyCloudPlaylists(playlists)
-        repository.applyCloudFavorites(favs, repository.activeProfileFlow.first())
-        CloudSyncUiState.Synced(
-            favoritesCount = favs.size,
-            customChannelsCount = customChannels.size,
-            playlistsCount = playlists.size
-        ) as CloudSyncUiState
-    }.catch { error ->
-        val firestoreError = generateSequence(error) { it.cause }
-            .filterIsInstance<FirebaseFirestoreException>()
-            .firstOrNull()
-        if (firestoreError == null && error is CancellationException) throw error
-        val rootError = firestoreError ?: error
-        Log.w("AshikaVM", "Cloud sync observation error", rootError)
-        emit(CloudSyncUiState.Error(rootError.message ?: "Cloud sync unavailable"))
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5_000L),
-        initialValue = CloudSyncUiState.Loading
-    )
+    private val cloudSyncState: StateFlow<CloudSyncUiState> = cloudSyncRepository?.let { cloud ->
+        combine(
+            cloud.observeFavorites(currentUserId),
+            cloud.observeCustomChannels(currentUserId),
+            cloud.observePlaylists(currentUserId)
+        ) { favs, customChannels, playlists ->
+            repository.applyCloudCustomChannels(customChannels)
+            repository.applyCloudPlaylists(playlists)
+            repository.applyCloudFavorites(favs, repository.activeProfileFlow.first())
+            CloudSyncUiState.Synced(
+                favoritesCount = favs.size,
+                customChannelsCount = customChannels.size,
+                playlistsCount = playlists.size
+            ) as CloudSyncUiState
+        }.catch { error ->
+            val firestoreError = generateSequence(error) { it.cause }
+                .filterIsInstance<FirebaseFirestoreException>()
+                .firstOrNull()
+            if (firestoreError == null && error is CancellationException) throw error
+            val rootError = firestoreError ?: error
+            Log.w("AshikaVM", "Cloud sync observation error", rootError)
+            emit(CloudSyncUiState.Error(rootError.message ?: "Cloud sync unavailable"))
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000L),
+            initialValue = CloudSyncUiState.Loading
+        )
+    } ?: MutableStateFlow(CloudSyncUiState.Error("Cloud sync is not configured"))
 
     private val prefsAndCloudFlow = combine(
         repository.appLanguageFlow,
@@ -459,28 +461,28 @@ class AshikaViewModel(
             }
             pushProfileToCloud()
         }
-        viewModelScope.launch {
-            cloudSyncRepository.observeUserProfile(currentUserId)
-                .catch { error ->
-                    val firestoreError = generateSequence(error) { it.cause }
-                        .filterIsInstance<FirebaseFirestoreException>()
-                        .firstOrNull()
-                    if (firestoreError == null && error is CancellationException) throw error
-                    Log.w("AshikaVM", "Profile observation error", firestoreError ?: error)
-                }
-                .collect { remoteProfile ->
-                    if (remoteProfile != null) {
-                        if (remoteProfile.activeProfile.isNotBlank() &&
-                            remoteProfile.activeProfile != repository.activeProfileFlow.first()
-                        ) {
-                            repository.switchProfile(remoteProfile.activeProfile)
-                        }
-                        val remoteLang = AppLanguage.fromCode(remoteProfile.appLanguage)
-                        if (remoteLang != repository.appLanguageFlow.first()) {
-                            repository.setAppLanguage(remoteLang)
+        cloudSyncRepository?.let { cloud ->
+            viewModelScope.launch {
+                cloud.observeUserProfile(currentUserId)
+                    .catch { error ->
+                        val firestoreError = generateSequence(error) { it.cause }
+                            .filterIsInstance<FirebaseFirestoreException>()
+                            .firstOrNull()
+                        if (firestoreError == null && error is CancellationException) throw error
+                        Log.w("AshikaVM", "Profile observation error", firestoreError ?: error)
+                    }
+                    .collect { remoteProfile ->
+                        if (remoteProfile != null) {
+                            if (remoteProfile.activeProfile.isNotBlank() &&
+                                remoteProfile.activeProfile != repository.activeProfileFlow.first()
+                            ) repository.switchProfile(remoteProfile.activeProfile)
+                            val remoteLang = AppLanguage.fromCode(remoteProfile.appLanguage)
+                            if (remoteLang != repository.appLanguageFlow.first()) {
+                                repository.setAppLanguage(remoteLang)
+                            }
                         }
                     }
-                }
+            }
         }
         viewModelScope.launch {
             var tickCount = 0
@@ -682,13 +684,12 @@ class AshikaViewModel(
         val profile = uiState.value.activeProfile
         viewModelScope.launch {
             val isNowStarred = repository.toggleFavorite(profile, channel.url)
-            val syncResult = if (isNowStarred) {
-                cloudSyncRepository.upsertFavorite(profile, channel)
-            } else {
-                cloudSyncRepository.removeFavorite(profile, channel.url)
-            }
-            syncResult.onFailure { err ->
-                Log.w("AshikaVM", "Favorite cloud sync error: ${err.message}")
+            cloudSyncRepository?.let { cloud ->
+                val syncResult = if (isNowStarred) cloud.upsertFavorite(profile, channel)
+                    else cloud.removeFavorite(profile, channel.url)
+                syncResult.onFailure { err ->
+                    Log.w("AshikaVM", "Favorite cloud sync error: ${err.message}")
+                }
             }
             emitMessage(
                 if (isNowStarred) "Starred \"${channel.name}\""
@@ -716,7 +717,7 @@ class AshikaViewModel(
             }.orEmpty()
             if (!previousUrl.isNullOrBlank() && previousUrl != cleanUrl) {
                 repository.deleteChannel(previousUrl)
-                cloudSyncRepository.removeCustomChannel(previousUrl)
+                cloudSyncRepository?.removeCustomChannel(previousUrl)
             }
             val entity = ChannelEntity(
                 url = cleanUrl,
@@ -727,7 +728,7 @@ class AshikaViewModel(
                 source = "manual"
             )
             repository.saveChannel(entity)
-            cloudSyncRepository.upsertCustomChannel(entity)
+            cloudSyncRepository?.upsertCustomChannel(entity)
             emitMessage("Saved \"$cleanName\"")
         }
     }
@@ -738,7 +739,7 @@ class AshikaViewModel(
                 stopPlayback()
             }
             repository.deleteChannel(channel.url)
-            cloudSyncRepository.removeCustomChannel(channel.url)
+            cloudSyncRepository?.removeCustomChannel(channel.url)
             emitMessage("Deleted \"${channel.name}\"")
         }
     }
@@ -782,7 +783,7 @@ class AshikaViewModel(
     fun removePlaylist(url: String) {
         viewModelScope.launch {
             repository.removePlaylist(url)
-            cloudSyncRepository.removePlaylist(url)
+            cloudSyncRepository?.removePlaylist(url)
             emitMessage("Removed saved playlist")
         }
     }
@@ -791,6 +792,11 @@ class AshikaViewModel(
         viewModelScope.launch {
             controls.update { it.copy(isBusy = true) }
             var failures = 0
+            if (cloudSyncRepository == null) {
+                controls.update { it.copy(isBusy = false) }
+                emitMessage("Cloud sync is not configured. Your channels and playlists remain saved locally.")
+                return@launch
+            }
             pushProfileToCloud().onFailure { failures++ }
 
             val channelsByUrl = repository.getChannelsSnapshot().associateBy { it.url }
@@ -799,13 +805,13 @@ class AshikaViewModel(
                     url = fav.channelUrl,
                     name = "Starred Channel"
                 )
-                cloudSyncRepository.upsertFavorite(fav.profileName, ch).onFailure { failures++ }
+                cloudSyncRepository?.upsertFavorite(fav.profileName, ch).onFailure { failures++ }
             }
             channelsByUrl.values.filter { it.source == "manual" }.forEach { ch ->
-                cloudSyncRepository.upsertCustomChannel(ch).onFailure { failures++ }
+                cloudSyncRepository?.upsertCustomChannel(ch).onFailure { failures++ }
             }
             repository.getPlaylistsSnapshot().forEach { pl ->
-                cloudSyncRepository.upsertPlaylist(pl).onFailure { failures++ }
+                cloudSyncRepository?.upsertPlaylist(pl).onFailure { failures++ }
             }
             controls.update { it.copy(isBusy = false) }
             if (failures == 0) {
@@ -822,7 +828,9 @@ class AshikaViewModel(
     ): Result<Unit> {
         val profile = activeProfileOverride ?: repository.activeProfileFlow.first()
         val lang = appLanguageOverride ?: repository.appLanguageFlow.first()
-        return cloudSyncRepository.upsertUserProfile(
+        val cloud = cloudSyncRepository
+            ?: return Result.failure(IllegalStateException("Cloud sync is not configured"))
+        return cloud.upsertUserProfile(
             displayName = userDisplayName,
             activeProfile = profile,
             appLanguage = lang
@@ -831,7 +839,7 @@ class AshikaViewModel(
 
     private suspend fun syncPlaylistsSnapshotToCloud() {
         repository.getPlaylistsSnapshot().forEach { pl ->
-            cloudSyncRepository.upsertPlaylist(pl)
+            cloudSyncRepository?.upsertPlaylist(pl)
         }
     }
 
