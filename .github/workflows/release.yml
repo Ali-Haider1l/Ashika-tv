@@ -83,6 +83,18 @@ jobs:
           mkdir -p release
           cp app/build/outputs/apk/release/*.apk "release/Ashika-TV-$RELEASE_TAG.apk"
 
+      - name: Verify APK alignment, package metadata, and signature
+        shell: bash
+        run: |
+          APK="release/Ashika-TV-\$(grep -oP 'versionName = "\\K[^" ]+' app/build.gradle.kts | head -n 1).apk"
+          test -s "$APK"
+          BUILD_TOOLS="\$(ls -1 "$ANDROID_HOME/build-tools" | sort -V | tail -n 1)"
+          "\$ANDROID_HOME/build-tools/\$BUILD_TOOLS/zipalign" -c -v 4 "$APK"
+          "\$ANDROID_HOME/build-tools/\$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK"
+          PACKAGE="\$(\$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer manifest application-id "$APK")"
+          test "$PACKAGE" = "com.aistudio.ashikatv.rmtvyq"
+          echo "Verified install package: $PACKAGE"
+
       - name: Upload release APK artifact
         uses: actions/upload-artifact@v4
         with:
