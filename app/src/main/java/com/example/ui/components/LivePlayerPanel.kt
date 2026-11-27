@@ -1,6 +1,5 @@
 package com.example.ui.components
 
-import android.app.Activity
 import android.graphics.Rect
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -102,6 +101,7 @@ import com.example.ui.theme.ObsidianNight
 import com.example.ui.theme.StarGold
 import com.example.ui.theme.ToffeeMagenta
 import com.example.ui.theme.ToffeeViolet
+import com.example.ui.util.PipHelper.findActivity
 import com.example.ui.util.TimeFormat
 import com.example.ui.util.ToffeeStrings
 import kotlin.math.roundToInt
@@ -860,7 +860,7 @@ fun FullscreenPlayerOverlay(
     // Use immersive system UI while the player is fullscreen, restoring it on exit.
     val playerView = LocalView.current
     DisposableEffect(playerView) {
-        val window = (playerView.context as? Activity)?.window
+        val window = playerView.context.findActivity()?.window
         val controller = window?.let { WindowInsetsControllerCompat(it, playerView) }
         controller?.systemBarsBehavior =
             WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
