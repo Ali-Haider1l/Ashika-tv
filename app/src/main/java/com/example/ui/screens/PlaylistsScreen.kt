@@ -43,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -63,6 +64,7 @@ fun PlaylistsScreen(
     onSyncLan: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val clipboardManager = LocalClipboardManager.current
     val isBn = uiState.isBanglaMode
     val lang = uiState.appLanguage
     var playlistUrlInput by remember { mutableStateOf(AshikaRepository.DEFAULT_PLAYLIST_URL) }
@@ -175,16 +177,32 @@ fun PlaylistsScreen(
                             .fillMaxWidth()
                             .testTag("playlist_url_input")
                     )
-                    Button(
-                        onClick = { onLoadPlaylistUrl(playlistUrlInput) },
-                        enabled = !uiState.isBusy,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("load_playlist_button")
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Rounded.CloudDownload, null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(if (isBn) "প্লেলিস্ট লোড করুন" else "Load Playlist")
+                        Button(
+                            onClick = { onLoadPlaylistUrl(playlistUrlInput) },
+                            enabled = !uiState.isBusy && playlistUrlInput.isNotBlank(),
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("load_playlist_button")
+                        ) {
+                            Icon(Icons.Rounded.CloudDownload, null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(if (isBn) "লোড করুন" else "Load")
+                        }
+                        FilledTonalButton(
+                            onClick = {
+                                val pasted = clipboardManager.getText()?.text?.trim().orEmpty()
+                                if (pasted.isNotBlank()) playlistUrlInput = pasted
+                            },
+                            enabled = !uiState.isBusy,
+                            modifier = Modifier.testTag("paste_playlist_button")
+                        ) {
+                            Text(if (isBn) "পেস্ট" else "Paste")
+                        }
                     }
                 }
             }
