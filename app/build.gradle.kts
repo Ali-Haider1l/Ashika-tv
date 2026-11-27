@@ -146,3 +146,5 @@ dependencies {
   "ksp"(libs.androidx.room.compiler)
   // "ksp"(libs.moshi.kotlin.codegen)
 }
+
+// Release workflow trigger: publish the verified 6.3.2 build.
