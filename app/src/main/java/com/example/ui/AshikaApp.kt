@@ -88,7 +88,6 @@ import com.example.data.local.PreferencesManager
 import com.example.data.model.AppLanguage
 import com.example.data.model.ChannelEntity
 import com.example.data.network.PlaylistFetcher
-import com.example.data.remote.CloudSyncRepository
 import com.example.data.repository.AshikaRepository
 import com.example.ui.auth.AuthScreen
 import com.example.ui.auth.authStateFlow
@@ -112,10 +111,6 @@ import com.example.ui.theme.ToffeeViolet
 import com.example.ui.util.PipHelper
 import com.example.ui.util.PipHelper.findActivity
 import com.example.ui.util.ToffeeStrings
-import com.google.firebase.Firebase
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.auth.auth
-import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -163,9 +158,6 @@ fun AshikaAuthGate(
             key = deviceId,
             factory = viewModelFactory {
                 initializer {
-                    val db = FirebaseFirestore.getInstance(
-                        appContext.getString(R.string.firestore_database_id)
-                    )
                     val localDb = AshikaDatabase.getInstance(appContext)
                     val prefs = PreferencesManager(appContext)
                     val repository = AshikaRepository(
@@ -176,7 +168,8 @@ fun AshikaAuthGate(
                     AshikaViewModel(
                         appContext = appContext,
                         repository = repository,
-                        cloudSyncRepository = CloudSyncRepository(db),
+                        // Cloud sync is optional; never initialize Firebase during app startup.
+                        cloudSyncRepository = null,
                         currentUserId = deviceId,
                         userDisplayName = "Guest",
                         userEmail = ""
