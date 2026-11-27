@@ -1,0 +1,183 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global safety net: deny all unmatched paths by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidUserProfile(data, userId) {
+      return data.userId is string &&
+             data.userId == userId &&
+             data.activeProfile is string &&
+             data.activeProfile.size() >= 1 &&
+             data.activeProfile.size() <= 50 &&
+             data.appLanguage is string &&
+             data.appLanguage in ['bn', 'en', 'hi', 'ur', 'ar'] &&
+             (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 80)) &&
+             data.createdAt is timestamp &&
+             data.createdAt <= request.time &&
+             data.updatedAt is timestamp &&
+             data.updatedAt <= request.time;
+    }
+
+    function isValidFavorite(data, userId) {
+      return data.userId is string &&
+             data.userId == userId &&
+             data.profileName is string &&
+             data.profileName.size() >= 1 &&
+             data.profileName.size() <= 50 &&
+             data.channelUrl is string &&
+             data.channelUrl.size() >= 1 &&
+             data.channelUrl.size() <= 1000 &&
+             data.channelName is string &&
+             data.channelName.size() >= 1 &&
+             data.channelName.size() <= 120 &&
+             (!('groupTitle' in data) || (data.groupTitle is string && data.groupTitle.size() <= 80)) &&
+             (!('logoUrl' in data) || (data.logoUrl is string && data.logoUrl.size() <= 1000)) &&
+             data.createdAt is timestamp &&
+             data.createdAt <= request.time &&
+             data.updatedAt is timestamp &&
+             data.updatedAt <= request.time;
+    }
+
+    function isValidCloudChannel(data, userId) {
+      return data.userId is string &&
+             data.userId == userId &&
+             data.channelName is string &&
+             data.channelName.size() >= 1 &&
+             data.channelName.size() <= 120 &&
+             data.streamUrl is string &&
+             data.streamUrl.size() >= 1 &&
+             data.streamUrl.size() <= 1000 &&
+             data.groupTitle is string &&
+             data.groupTitle.size() >= 1 &&
+             data.groupTitle.size() <= 80 &&
+             (!('logoUrl' in data) || (data.logoUrl is string && data.logoUrl.size() <= 1000)) &&
+             (!('tvgId' in data) || (data.tvgId is string && data.tvgId.size() <= 120)) &&
+             data.createdAt is timestamp &&
+             data.createdAt <= request.time &&
+             data.updatedAt is timestamp &&
+             data.updatedAt <= request.time;
+    }
+
+    function isValidCloudPlaylist(data, userId) {
+      return data.userId is string &&
+             data.userId == userId &&
+             data.title is string &&
+             data.title.size() >= 1 &&
+             data.title.size() <= 120 &&
+             data.playlistUrl is string &&
+             data.playlistUrl.size() >= 1 &&
+             data.playlistUrl.size() <= 1000 &&
+             data.channelCount is int &&
+             data.channelCount >= 0 &&
+             data.channelCount <= 100000 &&
+             data.createdAt is timestamp &&
+             data.createdAt <= request.time &&
+             data.updatedAt is timestamp &&
+             data.updatedAt <= request.time;
+    }
+
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if isOwner(userId);
+
+      allow create: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       incoming().keys().hasAll(['userId', 'activeProfile', 'appLanguage', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'displayName', 'activeProfile', 'appLanguage', 'createdAt', 'updatedAt']) &&
+                       isValidUserProfile(incoming(), userId);
+
+      allow update: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       isValidUserProfile(incoming(), userId) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'activeProfile', 'appLanguage', 'updatedAt']);
+
+      allow delete: if isOwner(userId) && isValidId(userId);
+
+      match /favorites/{favoriteId} {
+        allow get: if isOwner(userId) && isValidId(favoriteId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(favoriteId) &&
+                         incoming().keys().hasAll(['userId', 'profileName', 'channelUrl', 'channelName', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'profileName', 'channelUrl', 'channelName', 'groupTitle', 'logoUrl', 'createdAt', 'updatedAt']) &&
+                         isValidFavorite(incoming(), userId);
+
+        allow update: if isOwner(userId) &&
+                         isValidId(favoriteId) &&
+                         isValidFavorite(incoming(), userId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['profileName', 'channelUrl', 'channelName', 'groupTitle', 'logoUrl', 'updatedAt']);
+
+        allow delete: if isOwner(userId) && isValidId(favoriteId);
+      }
+
+      match /channels/{channelId} {
+        allow get: if isOwner(userId) && isValidId(channelId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(channelId) &&
+                         incoming().keys().hasAll(['userId', 'channelName', 'streamUrl', 'groupTitle', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'channelName', 'streamUrl', 'groupTitle', 'logoUrl', 'tvgId', 'createdAt', 'updatedAt']) &&
+                         isValidCloudChannel(incoming(), userId);
+
+        allow update: if isOwner(userId) &&
+                         isValidId(channelId) &&
+                         isValidCloudChannel(incoming(), userId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['channelName', 'streamUrl', 'groupTitle', 'logoUrl', 'tvgId', 'updatedAt']);
+
+        allow delete: if isOwner(userId) && isValidId(channelId);
+      }
+
+      match /playlists/{playlistId} {
+        allow get: if isOwner(userId) && isValidId(playlistId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(playlistId) &&
+                         incoming().keys().hasAll(['userId', 'title', 'playlistUrl', 'channelCount', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'title', 'playlistUrl', 'channelCount', 'createdAt', 'updatedAt']) &&
+                         isValidCloudPlaylist(incoming(), userId);
+
+        allow update: if isOwner(userId) &&
+                         isValidId(playlistId) &&
+                         isValidCloudPlaylist(incoming(), userId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['title', 'playlistUrl', 'channelCount', 'updatedAt']);
+
+        allow delete: if isOwner(userId) && isValidId(playlistId);
+      }
+    }
+  }
+}

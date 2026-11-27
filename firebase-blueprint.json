@@ -1,0 +1,175 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User preferences and active family profile synced across devices.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID owning this profile document."
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Display name shown in account header."
+        },
+        "activeProfile": {
+          "type": "string",
+          "description": "Currently active family profile name."
+        },
+        "appLanguage": {
+          "type": "string",
+          "enum": ["bn", "en", "hi", "ur", "ar"],
+          "description": "Preferred UI language code."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server-generated creation timestamp (FieldValue.serverTimestamp())."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server-generated update timestamp (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": ["userId", "activeProfile", "appLanguage", "createdAt", "updatedAt"]
+    },
+    "CloudFavorite": {
+      "title": "CloudFavorite",
+      "description": "Starred IPTV channel synchronized for a user profile.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID owning this favorite."
+        },
+        "profileName": {
+          "type": "string",
+          "description": "Family profile name owning this favorite."
+        },
+        "channelUrl": {
+          "type": "string",
+          "description": "Stream URL of the starred channel."
+        },
+        "channelName": {
+          "type": "string",
+          "description": "Channel display title."
+        },
+        "groupTitle": {
+          "type": "string",
+          "description": "Channel category name."
+        },
+        "logoUrl": {
+          "type": "string",
+          "description": "Channel logo URL."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server-generated creation timestamp (FieldValue.serverTimestamp())."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server-generated update timestamp (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": ["userId", "profileName", "channelUrl", "channelName", "createdAt", "updatedAt"]
+    },
+    "CloudChannel": {
+      "title": "CloudChannel",
+      "description": "User-added or edited custom IPTV channel.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID owning this custom channel."
+        },
+        "channelName": {
+          "type": "string",
+          "description": "Channel display title."
+        },
+        "streamUrl": {
+          "type": "string",
+          "description": "HTTP/HTTPS stream URL."
+        },
+        "groupTitle": {
+          "type": "string",
+          "description": "Channel category name."
+        },
+        "logoUrl": {
+          "type": "string",
+          "description": "Optional logo URL."
+        },
+        "tvgId": {
+          "type": "string",
+          "description": "Optional XMLTV EPG channel ID."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server-generated creation timestamp (FieldValue.serverTimestamp())."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server-generated update timestamp (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": ["userId", "channelName", "streamUrl", "groupTitle", "createdAt", "updatedAt"]
+    },
+    "CloudPlaylist": {
+      "title": "CloudPlaylist",
+      "description": "User-saved M3U or Toffee playlist URL synced across devices.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID owning this playlist entry."
+        },
+        "title": {
+          "type": "string",
+          "description": "Friendly playlist title."
+        },
+        "playlistUrl": {
+          "type": "string",
+          "description": "HTTP/HTTPS URL for the playlist."
+        },
+        "channelCount": {
+          "type": "integer",
+          "description": "Last synced channel count."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server-generated creation timestamp (FieldValue.serverTimestamp())."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server-generated update timestamp (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": ["userId", "title", "playlistUrl", "channelCount", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "User profile settings, active family profile, and language preference."
+    },
+    "/users/{userId}/favorites/{favoriteId}": {
+      "schema": { "$ref": "#/entities/CloudFavorite" },
+      "description": "Starred IPTV channels belonging to the user."
+    },
+    "/users/{userId}/channels/{channelId}": {
+      "schema": { "$ref": "#/entities/CloudChannel" },
+      "description": "User-authored custom IPTV channels."
+    },
+    "/users/{userId}/playlists/{playlistId}": {
+      "schema": { "$ref": "#/entities/CloudPlaylist" },
+      "description": "User-saved IPTV playlist sources."
+    }
+  }
+}

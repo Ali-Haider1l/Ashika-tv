@@ -22,6 +22,9 @@ interface AshikaDao {
     @Query("SELECT * FROM channels ORDER BY name COLLATE NOCASE ASC")
     fun observeChannels(): Flow<List<ChannelEntity>>
 
+    @Query("SELECT * FROM channels")
+    suspend fun getChannelsSnapshot(): List<ChannelEntity>
+
     @Query(
         """
         SELECT c.* FROM channels c
@@ -59,6 +62,9 @@ interface AshikaDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertPlaylist(playlist: PlaylistEntity)
 
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertPlaylistIfMissing(playlist: PlaylistEntity)
+
     @Query("DELETE FROM playlists WHERE url = :url")
     suspend fun deletePlaylistByUrl(url: String)
 
@@ -79,6 +85,12 @@ interface AshikaDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertFavorite(favorite: ProfileFavoriteEntity)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertFavoriteIfMissing(favorite: ProfileFavoriteEntity)
+
+    @Query("SELECT * FROM profile_favorites")
+    suspend fun getAllFavoritesSnapshot(): List<ProfileFavoriteEntity>
 
     @Query("DELETE FROM profile_favorites WHERE profileName = :profileName AND channelUrl = :channelUrl")
     suspend fun deleteFavorite(profileName: String, channelUrl: String)

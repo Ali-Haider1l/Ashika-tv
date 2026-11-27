@@ -11,11 +11,15 @@ import com.example.data.model.EpgProgramEntity
 import com.example.data.model.FamilyProfileEntity
 import com.example.data.model.MatchEntryEntity
 import com.example.data.model.PlaylistEntity
+import com.example.data.model.ProfileFavoriteEntity
 import com.example.data.model.ProfileRecentEntity
 import com.example.data.model.WatchStatEntity
 import com.example.data.network.PlaylistFetcher
 import com.example.data.parser.EpgParser
 import com.example.data.parser.M3uParser
+import com.example.data.remote.CloudChannelDoc
+import com.example.data.remote.CloudFavoriteDoc
+import com.example.data.remote.CloudPlaylistDoc
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -300,6 +304,77 @@ class AshikaRepository(
             dao.deleteChannelsBySource("lan")
             dao.upsertChannels(incoming)
             incoming.size
+        }
+    }
+
+    suspend fun getChannelsSnapshot(): List<ChannelEntity> = dao.getChannelsSnapshot()
+
+    suspend fun getPlaylistsSnapshot(): List<PlaylistEntity> = dao.getPlaylistsSnapshot()
+
+    suspend fun getAllFavoritesSnapshot(): List<ProfileFavoriteEntity> = dao.getAllFavoritesSnapshot()
+
+    suspend fun applyCloudCustomChannels(remoteChannels: List<CloudChannelDoc>) {
+        if (remoteChannels.isEmpty()) return
+        val entities = remoteChannels.mapNotNull { doc ->
+            val url = doc.streamUrl.trim()
+            if (!M3uParser.isValidStreamUrl(url)) return@mapNotNull null
+            ChannelEntity(
+                url = url,
+                name = doc.channelName.trim().ifEmpty { "Channel" },
+                groupTitle = doc.groupTitle.trim().ifEmpty { "Other" },
+                logoUrl = doc.logoUrl.trim(),
+                tvgId = doc.tvgId.trim(),
+                source = "manual"
+            )
+        }
+        if (entities.isNotEmpty()) {
+            dao.upsertChannels(entities)
+            dao.syncChannelFavoriteFlagsForProfile(prefs.activeProfileFlow.first())
+        }
+    }
+
+    suspend fun applyCloudFavorites(remoteFavorites: List<CloudFavoriteDoc>, activeProfile: String) {
+        if (remoteFavorites.isEmpty()) return
+        remoteFavorites.forEach { fav ->
+            val profile = fav.profileName.trim().ifEmpty { PreferencesManager.DEFAULT_PROFILE }
+            val url = fav.channelUrl.trim()
+            if (url.isNotEmpty()) {
+                dao.insertProfile(FamilyProfileEntity(profile))
+                dao.insertFavoriteIfMissing(ProfileFavoriteEntity(profile, url))
+                if (M3uParser.isValidStreamUrl(url)) {
+                    val existing = dao.getChannelsSnapshot().any { it.url == url }
+                    if (!existing) {
+                        dao.upsertChannel(
+                            ChannelEntity(
+                                url = url,
+                                name = fav.channelName.trim().ifEmpty { "Starred Channel" },
+                                groupTitle = fav.groupTitle.trim().ifEmpty { "Other" },
+                                logoUrl = fav.logoUrl.trim(),
+                                source = "cloud",
+                                isFavorite = profile == activeProfile
+                            )
+                        )
+                    }
+                }
+            }
+        }
+        dao.syncChannelFavoriteFlagsForProfile(activeProfile)
+    }
+
+    suspend fun applyCloudPlaylists(remotePlaylists: List<CloudPlaylistDoc>) {
+        if (remotePlaylists.isEmpty()) return
+        remotePlaylists.forEach { pl ->
+            val url = pl.playlistUrl.trim()
+            if (M3uParser.isValidStreamUrl(url)) {
+                dao.insertPlaylistIfMissing(
+                    PlaylistEntity(
+                        url = url,
+                        title = pl.title.trim().ifEmpty { friendlyPlaylistTitle(url) },
+                        channelCount = pl.channelCount.toInt().coerceAtLeast(0),
+                        lastRefreshedAt = System.currentTimeMillis()
+                    )
+                )
+            }
         }
     }
 

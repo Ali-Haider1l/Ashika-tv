@@ -8,7 +8,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import com.example.ui.AshikaApp
+import com.example.ui.AshikaAuthGate
 import com.example.ui.theme.AshikaLiveTvTheme
 
 class MainActivity : ComponentActivity() {
@@ -29,7 +29,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             AshikaLiveTvTheme {
-                AshikaApp(isInSystemPipMode = isInSystemPipMode)
+                AshikaAuthGate(isInSystemPipMode = isInSystemPipMode)
             }
         }
     }

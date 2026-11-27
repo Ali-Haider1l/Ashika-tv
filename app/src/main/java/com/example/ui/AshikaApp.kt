@@ -56,6 +56,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -71,16 +72,27 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.credentials.CredentialManager
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.R
+import com.example.data.local.AshikaDatabase
+import com.example.data.local.PreferencesManager
 import com.example.data.model.AppLanguage
 import com.example.data.model.ChannelEntity
+import com.example.data.network.PlaylistFetcher
+import com.example.data.remote.CloudSyncRepository
+import com.example.data.repository.AshikaRepository
+import com.example.ui.auth.AuthScreen
+import com.example.ui.auth.authStateFlow
+import com.example.ui.auth.signOutWithCredentialCleanup
 import com.example.ui.components.ChannelEditorDialog
 import com.example.ui.components.ChannelPreviewBottomSheet
 import com.example.ui.components.DockedLivePlayer
@@ -100,6 +112,10 @@ import com.example.ui.theme.ToffeeViolet
 import com.example.ui.util.PipHelper
 import com.example.ui.util.PipHelper.findActivity
 import com.example.ui.util.ToffeeStrings
+import com.google.firebase.Firebase
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.auth
+import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -131,20 +147,78 @@ private fun destinationLabel(route: String, appLanguage: AppLanguage): String = 
     else -> route
 }
 
+@Composable
+fun AshikaAuthGate(
+    isInSystemPipMode: Boolean = false,
+    auth: FirebaseAuth = Firebase.auth
+) {
+    val currentUser by auth.authStateFlow().collectAsStateWithLifecycle(initialValue = auth.currentUser)
+
+    val user = currentUser
+    if (user == null) {
+        AuthScreen(onAuthSuccess = {})
+    } else {
+        key(user.uid) {
+            val uid = user.uid
+            val appContext = LocalContext.current.applicationContext
+            val viewModel: AshikaViewModel = viewModel(
+                key = uid,
+                factory = viewModelFactory {
+                    initializer {
+                        val db = FirebaseFirestore.getInstance(
+                            appContext.getString(R.string.firestore_database_id)
+                        )
+                        val localDb = AshikaDatabase.getInstance(appContext)
+                        val prefs = PreferencesManager(appContext)
+                        val repository = AshikaRepository(
+                            dao = localDb.ashikaDao(),
+                            prefs = prefs,
+                            fetcher = PlaylistFetcher()
+                        )
+                        AshikaViewModel(
+                            appContext = appContext,
+                            repository = repository,
+                            cloudSyncRepository = CloudSyncRepository(db),
+                            currentUserId = uid,
+                            userDisplayName = user.displayName.orEmpty(),
+                            userEmail = user.email.orEmpty()
+                        )
+                    }
+                }
+            )
+            AshikaApp(
+                isInSystemPipMode = isInSystemPipMode,
+                viewModel = viewModel
+            )
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AshikaApp(
     isInSystemPipMode: Boolean = false,
-    viewModel: AshikaViewModel = viewModel()
+    viewModel: AshikaViewModel
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
+    val credentialManager = remember(context) { CredentialManager.create(context) }
     val scope = rememberCoroutineScope()
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route ?: ROUTE_CHANNELS
     val snackbarHostState = remember { SnackbarHostState() }
+
+    val onSignOut: () -> Unit = {
+        signOutWithCredentialCleanup(
+            credentialManager = credentialManager,
+            scope = scope,
+            onBeforeFirebaseSignOut = {
+                viewModel.stopPlayback()
+            }
+        )
+    }
 
     var showSplash by remember { mutableStateOf(true) }
     var showChannelEditor by remember { mutableStateOf(false) }
@@ -471,7 +545,9 @@ fun AshikaApp(
                                     },
                                     onImportLocalEpg = { uri ->
                                         viewModel.importLocalEpg(context.contentResolver, uri)
-                                    }
+                                    },
+                                    onSyncCloud = viewModel::syncAllToCloud,
+                                    onSignOut = onSignOut
                                 )
                             }
                         }
@@ -544,6 +620,8 @@ fun AshikaApp(
                                     onImportLocalEpg = { uri ->
                                         viewModel.importLocalEpg(context.contentResolver, uri)
                                     },
+                                    onSyncCloud = viewModel::syncAllToCloud,
+                                    onSignOut = onSignOut,
                                     modifier = Modifier.widthIn(max = 840.dp)
                                 )
                             }
@@ -681,6 +759,8 @@ private fun AshikaNavHost(
     onInspectChannel: (ChannelEntity) -> Unit,
     onImportLocalM3u: (android.net.Uri) -> Unit,
     onImportLocalEpg: (android.net.Uri) -> Unit,
+    onSyncCloud: () -> Unit,
+    onSignOut: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     NavHost(
@@ -755,7 +835,9 @@ private fun AshikaNavHost(
                 onGeneratePairCode = viewModel::generatePairingCode,
                 onSubmitAdminPin = viewModel::submitAdminPin,
                 onLockAdmin = viewModel::lockAdmin,
-                onRefreshBulkPlaylists = viewModel::saveAndRefreshAdminPlaylists
+                onRefreshBulkPlaylists = viewModel::saveAndRefreshAdminPlaylists,
+                onSyncCloud = onSyncCloud,
+                onSignOut = onSignOut
             )
         }
     }
