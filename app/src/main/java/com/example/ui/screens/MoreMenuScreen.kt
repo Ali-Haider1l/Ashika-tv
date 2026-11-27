@@ -377,22 +377,59 @@ fun MoreMenuScreen(
                 }
                 item {
                     Surface(
-                        shape = MaterialTheme.shapes.medium,
+                        shape = MaterialTheme.shapes.large,
                         color = MaterialTheme.colorScheme.surfaceContainerLow,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("about_contact_card")
                     ) {
                         Column(
-                            modifier = Modifier.padding(14.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Rounded.Info, null, tint = ToffeeMagenta)
                                 Spacer(Modifier.width(10.dp))
-                                Text("Ashika Live TV • v1.0.0", style = MaterialTheme.typography.titleSmall)
+                                Text(
+                                    text = if (isBn) "Ashika TV সম্পর্কে" else "About Ashika TV",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
                             }
                             Text(
-                                text = if (isBn) "আমাদের সম্পর্কে • ব্যবহারের শর্তাবলী • গোপনীয়তা নীতি"
-                                else "About Us • Terms of Use • Privacy Policy",
+                                text = if (isBn) {
+                                    "Ashika TV একটি সহজ ও ব্যবহারবান্ধব লাইভ টিভি প্লেয়ার। নিজের M3U প্লেলিস্ট যোগ করে চ্যানেল দেখুন, পছন্দের চ্যানেল সংরক্ষণ করুন এবং EPG গাইড ব্যবহার করুন।"
+                                } else {
+                                    "Ashika TV is an easy-to-use live TV player. Add your own M3U playlists, watch channels, save favorites, and browse the EPG program guide."
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = if (isBn) "যোগাযোগ করুন" else "Contact Us",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Button(
+                                onClick = {
+                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("$facebook"))
+                                    context.startActivity(intent)
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = ToffeeMagenta,
+                                    contentColor = Color.White
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("contact_facebook_button")
+                            ) {
+                                Text(
+                                    text = if (isBn) "Facebook প্রোফাইলে যোগাযোগ করুন" else "Visit our Facebook Profile",
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                            Text(
+                                text = "Ashika TV • v6.1.0",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
