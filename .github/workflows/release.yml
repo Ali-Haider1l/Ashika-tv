@@ -2,14 +2,16 @@ name: Ashika TV Release
 
 on:
   push:
-    tags:
-      - "v*"
+    branches:
+      - main
+    paths:
+      - "app/build.gradle.kts"
   workflow_dispatch:
     inputs:
       version:
         description: "Public release version (example: 6.2.0)"
         required: true
-        default: "6.2.0"
+        default: "6.2.1"
         type: string
 
 permissions:
