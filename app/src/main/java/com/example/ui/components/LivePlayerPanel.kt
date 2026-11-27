@@ -916,7 +916,7 @@ fun FullscreenPlayerOverlay(
         onDispose {
             controller?.show(WindowInsetsCompat.Type.systemBars())
             if (previousOrientation != null) {
-                activity.requestedOrientation = previousOrientation
+                activity?.requestedOrientation = previousOrientation
             }
         }
     }
