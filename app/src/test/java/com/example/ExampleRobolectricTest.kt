@@ -25,7 +25,7 @@ import java.util.TimeZone
 import java.util.zip.GZIPOutputStream
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36])
+@Config(sdk = [35])
 class ExampleRobolectricTest {
 
   @Test
