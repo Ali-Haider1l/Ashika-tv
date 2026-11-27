@@ -5,6 +5,12 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Public release version (example: 1.0.0)"
+        required: true
+        default: "1.0.0"
+        type: string
 
 permissions:
   contents: write
@@ -25,6 +31,18 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+
+      - name: Set release tag
+        id: release
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+            [[ "$VERSION" == v* ]] || VERSION="v$VERSION"
+          else
+            VERSION="${GITHUB_REF_NAME}"
+          fi
+          echo "tag=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Decode Android release signing key
         env:
@@ -48,6 +66,7 @@ jobs:
           KEYSTORE_PATH: upload-key.jks
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
         run: |
           if [ -z "$STORE_PASSWORD" ] || [ -z "$KEY_PASSWORD" ]; then
             echo "Missing repository secrets: STORE_PASSWORD and/or KEY_PASSWORD"
@@ -55,19 +74,21 @@ jobs:
           fi
           gradle --no-daemon clean assembleRelease
           mkdir -p release
-          cp app/build/outputs/apk/release/*.apk "release/Ashika-TV-${GITHUB_REF_NAME}.apk"
+          cp app/build/outputs/apk/release/*.apk "release/Ashika-TV-$RELEASE_TAG.apk"
 
       - name: Upload release APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Ashika-TV-release-${{ github.ref_name }}
+          name: Ashika-TV-release-${{ steps.release.outputs.tag }}
           path: release/*.apk
           retention-days: 90
 
       - name: Publish public GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: Ashika TV ${{ github.ref_name }}
+          tag_name: ${{ steps.release.outputs.tag }}
+          target_commitish: main
+          name: Ashika TV ${{ steps.release.outputs.tag }}
           generate_release_notes: true
           make_latest: true
           files: release/*.apk
