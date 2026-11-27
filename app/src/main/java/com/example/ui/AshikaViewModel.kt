@@ -792,7 +792,8 @@ class AshikaViewModel(
         viewModelScope.launch {
             controls.update { it.copy(isBusy = true) }
             var failures = 0
-            if (cloudSyncRepository == null) {
+            val cloudRepository = cloudSyncRepository
+            if (cloudRepository == null) {
                 controls.update { it.copy(isBusy = false) }
                 emitMessage("Cloud sync is not configured. Your channels and playlists remain saved locally.")
                 return@launch
@@ -805,13 +806,13 @@ class AshikaViewModel(
                     url = fav.channelUrl,
                     name = "Starred Channel"
                 )
-                cloudSyncRepository?.upsertFavorite(fav.profileName, ch).onFailure { failures++ }
+                cloudRepository.upsertFavorite(fav.profileName, ch).onFailure { failures++ }
             }
             channelsByUrl.values.filter { it.source == "manual" }.forEach { ch ->
-                cloudSyncRepository?.upsertCustomChannel(ch).onFailure { failures++ }
+                cloudRepository.upsertCustomChannel(ch).onFailure { failures++ }
             }
             repository.getPlaylistsSnapshot().forEach { pl ->
-                cloudSyncRepository?.upsertPlaylist(pl).onFailure { failures++ }
+                cloudRepository.upsertPlaylist(pl).onFailure { failures++ }
             }
             controls.update { it.copy(isBusy = false) }
             if (failures == 0) {
