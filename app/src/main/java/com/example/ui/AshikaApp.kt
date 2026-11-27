@@ -149,48 +149,45 @@ private fun destinationLabel(route: String, appLanguage: AppLanguage): String = 
 
 @Composable
 fun AshikaAuthGate(
-    isInSystemPipMode: Boolean = false,
-    auth: FirebaseAuth = Firebase.auth
+    isInSystemPipMode: Boolean = false
 ) {
-    val currentUser by auth.authStateFlow().collectAsStateWithLifecycle(initialValue = auth.currentUser)
-
-    val user = currentUser
-    if (user == null) {
-        AuthScreen(onAuthSuccess = {})
-    } else {
-        key(user.uid) {
-            val uid = user.uid
-            val appContext = LocalContext.current.applicationContext
-            val viewModel: AshikaViewModel = viewModel(
-                key = uid,
-                factory = viewModelFactory {
-                    initializer {
-                        val db = FirebaseFirestore.getInstance(
-                            appContext.getString(R.string.firestore_database_id)
-                        )
-                        val localDb = AshikaDatabase.getInstance(appContext)
-                        val prefs = PreferencesManager(appContext)
-                        val repository = AshikaRepository(
-                            dao = localDb.ashikaDao(),
-                            prefs = prefs,
-                            fetcher = PlaylistFetcher()
-                        )
-                        AshikaViewModel(
-                            appContext = appContext,
-                            repository = repository,
-                            cloudSyncRepository = CloudSyncRepository(db),
-                            currentUserId = uid,
-                            userDisplayName = user.displayName.orEmpty(),
-                            userEmail = user.email.orEmpty()
-                        )
-                    }
+    val appContext = LocalContext.current.applicationContext
+    val deviceId = remember {
+        android.provider.Settings.Secure.getString(
+            appContext.contentResolver,
+            android.provider.Settings.Secure.ANDROID_ID
+        )?.takeIf { it.isNotBlank() } ?: "ashika-tv-device"
+    }
+    key(deviceId) {
+        val viewModel: AshikaViewModel = viewModel(
+            key = deviceId,
+            factory = viewModelFactory {
+                initializer {
+                    val db = FirebaseFirestore.getInstance(
+                        appContext.getString(R.string.firestore_database_id)
+                    )
+                    val localDb = AshikaDatabase.getInstance(appContext)
+                    val prefs = PreferencesManager(appContext)
+                    val repository = AshikaRepository(
+                        dao = localDb.ashikaDao(),
+                        prefs = prefs,
+                        fetcher = PlaylistFetcher()
+                    )
+                    AshikaViewModel(
+                        appContext = appContext,
+                        repository = repository,
+                        cloudSyncRepository = CloudSyncRepository(db),
+                        currentUserId = deviceId,
+                        userDisplayName = "Guest",
+                        userEmail = ""
+                    )
                 }
-            )
-            AshikaApp(
-                isInSystemPipMode = isInSystemPipMode,
-                viewModel = viewModel
-            )
-        }
+            }
+        )
+        AshikaApp(
+            isInSystemPipMode = isInSystemPipMode,
+            viewModel = viewModel
+        )
     }
 }
 
@@ -203,22 +200,13 @@ fun AshikaApp(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
-    val credentialManager = remember(context) { CredentialManager.create(context) }
     val scope = rememberCoroutineScope()
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route ?: ROUTE_CHANNELS
     val snackbarHostState = remember { SnackbarHostState() }
 
-    val onSignOut: () -> Unit = {
-        signOutWithCredentialCleanup(
-            credentialManager = credentialManager,
-            scope = scope,
-            onBeforeFirebaseSignOut = {
-                viewModel.stopPlayback()
-            }
-        )
-    }
+    val onSignOut: () -> Unit = {}
 
     var showSplash by remember { mutableStateOf(true) }
     var showChannelEditor by remember { mutableStateOf(false) }
