@@ -5,6 +5,8 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import com.example.data.model.ChannelEntity
+import com.example.data.model.EpgChannelEntity
+import com.example.data.model.EpgProgramEntity
 import com.example.data.model.FamilyProfileEntity
 import com.example.data.model.MatchEntryEntity
 import com.example.data.model.PlaylistEntity
@@ -20,9 +22,11 @@ import com.example.data.model.WatchStatEntity
         ProfileFavoriteEntity::class,
         ProfileRecentEntity::class,
         WatchStatEntity::class,
-        MatchEntryEntity::class
+        MatchEntryEntity::class,
+        EpgChannelEntity::class,
+        EpgProgramEntity::class
     ],
-    version = 1,
+    version = 4,
     exportSchema = false
 )
 abstract class AshikaDatabase : RoomDatabase() {
@@ -38,7 +42,10 @@ abstract class AshikaDatabase : RoomDatabase() {
                     context.applicationContext,
                     AshikaDatabase::class.java,
                     "ashika_live_tv.db"
-                ).build().also { INSTANCE = it }
+                )
+                    .fallbackToDestructiveMigration(dropAllTables = true)
+                    .build()
+                    .also { INSTANCE = it }
             }
         }
     }

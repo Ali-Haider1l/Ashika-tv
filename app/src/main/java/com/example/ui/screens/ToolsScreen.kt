@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import android.content.Intent
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -21,6 +22,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.BarChart
@@ -65,7 +67,7 @@ import com.example.data.local.PreferencesManager
 import com.example.data.model.ChannelEntity
 import com.example.ui.AshikaUiState
 
-private enum class AshikaTool(val title: String) {
+enum class AshikaTool(val title: String) {
     FINDER("Finder"),
     HEALTH("Health"),
     STATS("Stats"),
@@ -87,9 +89,15 @@ fun ToolsScreen(
     onCreateProfile: (String) -> Unit,
     onDeleteProfile: (String) -> Unit,
     onGeneratePairCode: () -> Unit,
+    initialTool: AshikaTool = AshikaTool.FINDER,
+    onBack: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    var selectedTool by remember { mutableStateOf(AshikaTool.FINDER) }
+    var selectedTool by remember(initialTool) { mutableStateOf(initialTool) }
+
+    if (onBack != null) {
+        BackHandler { onBack() }
+    }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -97,7 +105,20 @@ fun ToolsScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {
-            Text("Ashika Tools", style = MaterialTheme.typography.headlineSmall)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                if (onBack != null) {
+                    IconButton(
+                        onClick = onBack,
+                        modifier = Modifier.minimumInteractiveComponentSize()
+                    ) {
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back to Menu")
+                    }
+                }
+                Text("Ashika Tools", style = MaterialTheme.typography.headlineSmall)
+            }
             Spacer(Modifier.height(8.dp))
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(AshikaTool.entries) { tool ->
@@ -292,8 +313,12 @@ private fun StreamHealthCard(
             } else {
                 HealthRow("Channel", health.channelName)
                 HealthRow("Playback State", health.playbackStateLabel)
-                HealthRow("Buffer", "${health.bufferedPercentage}%")
+                HealthRow("Bitrate", health.bitrateLabel)
                 HealthRow("Video Resolution", health.videoResolution)
+                HealthRow("Frame Rate", health.frameRateLabel)
+                HealthRow("Buffer", "${health.bufferedPercentage}%")
+                HealthRow("Codec", health.codecLabel)
+                HealthRow("Dropped Frames", health.droppedFrames.toString())
                 health.errorMessage?.let { err ->
                     HealthRow("Last Error", err)
                 }

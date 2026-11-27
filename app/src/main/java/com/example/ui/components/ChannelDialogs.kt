@@ -12,21 +12,25 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
-import androidx.compose.material.icons.rounded.Favorite
-import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.LiveTv
 import androidx.compose.material.icons.rounded.PersonAdd
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.StarOutline
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -45,12 +49,19 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.R
+import com.example.data.model.AppLanguage
 import com.example.data.model.ChannelEntity
+import com.example.data.model.ChannelEpgStatus
 import com.example.data.model.FamilyProfileEntity
+import com.example.ui.theme.StarGold
+import com.example.ui.theme.ToffeeMagenta
+import com.example.ui.util.TimeFormat
+import com.example.ui.util.ToffeeStrings
 
 @Composable
 fun ChannelEditorDialog(
@@ -135,6 +146,8 @@ fun ChannelEditorDialog(
 fun ChannelPreviewBottomSheet(
     channel: ChannelEntity,
     isFavorite: Boolean,
+    epgStatus: ChannelEpgStatus? = null,
+    nowMillis: Long = System.currentTimeMillis(),
     onDismiss: () -> Unit,
     onPlay: () -> Unit,
     onToggleFavorite: () -> Unit,
@@ -210,6 +223,98 @@ fun ChannelPreviewBottomSheet(
                 )
             }
 
+            if (epgStatus != null && epgStatus.upcoming.isNotEmpty()) {
+                Surface(
+                    shape = MaterialTheme.shapes.medium,
+                    color = MaterialTheme.colorScheme.surfaceContainer,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Rounded.Schedule,
+                                contentDescription = null,
+                                tint = ToffeeMagenta,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = "Program Schedule (EPG)",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                        epgStatus.now?.let { nowProg ->
+                            LinearProgressIndicator(
+                                progress = { epgStatus.progressFraction(nowMillis) },
+                                color = ToffeeMagenta,
+                                trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(4.dp)
+                                    .clip(RoundedCornerShape(2.dp))
+                            )
+                            if (nowProg.description.isNotBlank()) {
+                                Text(
+                                    text = nowProg.description,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(136.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            items(epgStatus.upcoming, key = { "${it.id}_${it.startMillis}" }) { prog ->
+                                val isNow = epgStatus.now?.let { it.startMillis == prog.startMillis } == true
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(MaterialTheme.shapes.small)
+                                        .background(
+                                            if (isNow) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                                            else MaterialTheme.colorScheme.surfaceContainerHigh
+                                        )
+                                        .padding(horizontal = 10.dp, vertical = 7.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = prog.title,
+                                            style = MaterialTheme.typography.labelLarge,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Text(
+                                            text = TimeFormat.formatRange(prog.startMillis, prog.endMillis),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    if (isNow) {
+                                        Text(
+                                            text = "NOW",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = ToffeeMagenta,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -233,12 +338,12 @@ fun ChannelPreviewBottomSheet(
                     modifier = Modifier.testTag("preview_favorite_button")
                 ) {
                     Icon(
-                        imageVector = if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                        imageVector = if (isFavorite) Icons.Rounded.Star else Icons.Rounded.StarOutline,
                         contentDescription = null,
-                        tint = if (isFavorite) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+                        tint = if (isFavorite) StarGold else MaterialTheme.colorScheme.onSurface
                     )
                     Spacer(Modifier.width(6.dp))
-                    Text(if (isFavorite) "Saved" else "Favorite")
+                    Text(if (isFavorite) "Starred" else "Star")
                 }
             }
 
@@ -358,6 +463,74 @@ fun ProfileSwitcherDialog(
         confirmButton = {
             TextButton(onClick = onDismiss) {
                 Text("Done")
+            }
+        }
+    )
+}
+
+@Composable
+fun LanguageSelectorDialog(
+    currentLanguage: AppLanguage,
+    onSelectLanguage: (AppLanguage) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = ToffeeStrings.chooseLanguageTitle(currentLanguage),
+                style = MaterialTheme.typography.titleLarge
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                AppLanguage.entries.forEach { language ->
+                    val selected = language == currentLanguage
+                    Surface(
+                        shape = MaterialTheme.shapes.small,
+                        color = if (selected) MaterialTheme.colorScheme.primaryContainer
+                        else MaterialTheme.colorScheme.surfaceContainerHigh,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(MaterialTheme.shapes.small)
+                            .clickable {
+                                onSelectLanguage(language)
+                                onDismiss()
+                            }
+                            .testTag("language_option_${language.code}")
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column {
+                                Text(
+                                    text = language.nativeName,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+                                )
+                                Text(
+                                    text = "${language.englishName} (${language.code.uppercase()})",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            if (selected) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Check,
+                                    contentDescription = null,
+                                    tint = ToffeeMagenta
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close")
             }
         }
     )

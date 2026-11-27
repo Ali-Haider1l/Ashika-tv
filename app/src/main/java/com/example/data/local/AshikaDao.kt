@@ -6,6 +6,8 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import com.example.data.model.ChannelEntity
+import com.example.data.model.EpgChannelEntity
+import com.example.data.model.EpgProgramEntity
 import com.example.data.model.FamilyProfileEntity
 import com.example.data.model.MatchEntryEntity
 import com.example.data.model.PlaylistEntity
@@ -19,6 +21,22 @@ interface AshikaDao {
 
     @Query("SELECT * FROM channels ORDER BY name COLLATE NOCASE ASC")
     fun observeChannels(): Flow<List<ChannelEntity>>
+
+    @Query(
+        """
+        SELECT c.* FROM channels c
+        INNER JOIN profile_favorites f ON c.url = f.channelUrl
+        WHERE f.profileName = :profileName
+        ORDER BY f.addedAt DESC
+        """
+    )
+    fun observeFavoriteChannels(profileName: String): Flow<List<ChannelEntity>>
+
+    @Query("UPDATE channels SET isFavorite = :isFavorite WHERE url = :url")
+    suspend fun updateChannelFavoriteFlag(url: String, isFavorite: Boolean)
+
+    @Query("UPDATE channels SET isFavorite = EXISTS(SELECT 1 FROM profile_favorites f WHERE f.profileName = :profileName AND f.channelUrl = channels.url)")
+    suspend fun syncChannelFavoriteFlagsForProfile(profileName: String)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertChannel(channel: ChannelEntity)
@@ -53,7 +71,7 @@ interface AshikaDao {
     @Query("DELETE FROM family_profiles WHERE name = :name")
     suspend fun deleteProfile(name: String)
 
-    @Query("SELECT channelUrl FROM profile_favorites WHERE profileName = :profileName")
+    @Query("SELECT channelUrl FROM profile_favorites WHERE profileName = :profileName ORDER BY addedAt DESC")
     fun observeFavoriteUrls(profileName: String): Flow<List<String>>
 
     @Query("SELECT EXISTS(SELECT 1 FROM profile_favorites WHERE profileName = :profileName AND channelUrl = :channelUrl)")
@@ -67,6 +85,19 @@ interface AshikaDao {
 
     @Query("DELETE FROM profile_favorites WHERE profileName = :profileName")
     suspend fun deleteAllFavoritesForProfile(profileName: String)
+
+    @Transaction
+    suspend fun toggleFavoriteForProfile(profileName: String, channelUrl: String): Boolean {
+        val currentlyFav = isFavorite(profileName, channelUrl)
+        val nextState = !currentlyFav
+        if (nextState) {
+            insertFavorite(ProfileFavoriteEntity(profileName, channelUrl))
+        } else {
+            deleteFavorite(profileName, channelUrl)
+        }
+        updateChannelFavoriteFlag(channelUrl, nextState)
+        return nextState
+    }
 
     @Query("SELECT channelUrl FROM profile_recents WHERE profileName = :profileName ORDER BY watchedAt DESC LIMIT 30")
     fun observeRecentUrls(profileName: String): Flow<List<String>>
@@ -117,4 +148,39 @@ interface AshikaDao {
 
     @Query("DELETE FROM match_entries WHERE id = :id")
     suspend fun deleteMatch(id: Long)
+
+    @Query("SELECT * FROM epg_channels")
+    fun observeEpgChannels(): Flow<List<EpgChannelEntity>>
+
+    @Query("SELECT * FROM epg_programs ORDER BY startMillis ASC")
+    fun observeEpgPrograms(): Flow<List<EpgProgramEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertEpgChannels(channels: List<EpgChannelEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertEpgPrograms(programs: List<EpgProgramEntity>)
+
+    @Query("DELETE FROM epg_channels")
+    suspend fun clearEpgChannels()
+
+    @Query("DELETE FROM epg_programs")
+    suspend fun clearEpgPrograms()
+
+    @Transaction
+    suspend fun replaceEpgData(
+        channels: List<EpgChannelEntity>,
+        programs: List<EpgProgramEntity>
+    ) {
+        clearEpgPrograms()
+        clearEpgChannels()
+        if (channels.isNotEmpty()) {
+            insertEpgChannels(channels)
+        }
+        if (programs.isNotEmpty()) {
+            programs.chunked(500).forEach { chunk ->
+                insertEpgPrograms(chunk)
+            }
+        }
+    }
 }

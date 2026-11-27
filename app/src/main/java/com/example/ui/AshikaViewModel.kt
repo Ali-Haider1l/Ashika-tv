@@ -4,17 +4,30 @@ import android.app.Application
 import android.content.ContentResolver
 import android.graphics.Bitmap
 import android.net.Uri
+import android.util.Rational
+import androidx.annotation.OptIn
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.DecoderReuseEvaluation
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.analytics.AnalyticsListener
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.source.MediaLoadData
 import com.example.data.local.AshikaDatabase
 import com.example.data.local.PreferencesManager
+import com.example.data.model.AppLanguage
 import com.example.data.model.ChannelEntity
+import com.example.data.model.ChannelEpgStatus
 import com.example.data.model.ChannelFilterTab
+import com.example.data.model.EpgChannelEntity
+import com.example.data.model.EpgProgramEntity
 import com.example.data.model.FamilyProfileEntity
 import com.example.data.model.MatchEntryEntity
 import com.example.data.model.PlaylistEntity
@@ -23,6 +36,7 @@ import com.example.data.model.WatchStatEntity
 import com.example.data.network.PlaylistFetcher
 import com.example.data.parser.M3uParser
 import com.example.data.repository.AshikaRepository
+import com.example.ui.util.PipHelper
 import com.example.ui.util.QrGenerator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -32,13 +46,13 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.Locale
 import kotlin.random.Random
 
 data class AshikaUiState(
@@ -47,16 +61,22 @@ data class AshikaUiState(
     val playlists: List<PlaylistEntity> = emptyList(),
     val profiles: List<FamilyProfileEntity> = emptyList(),
     val activeProfile: String = PreferencesManager.DEFAULT_PROFILE,
+    val favoriteChannels: List<ChannelEntity> = emptyList(),
     val favoriteUrls: Set<String> = emptySet(),
     val recentUrls: List<String> = emptyList(),
     val categories: List<String> = listOf("All", "News", "Sports", "Entertainment", "Music"),
     val selectedCategory: String = "All",
     val selectedTab: ChannelFilterTab = ChannelFilterTab.ALL,
     val searchQuery: String = "",
+    val isSearchExpanded: Boolean = false,
     val currentChannel: ChannelEntity? = null,
     val isPlaying: Boolean = false,
     val isBuffering: Boolean = false,
     val isFullscreen: Boolean = false,
+    val isInAppPip: Boolean = false,
+    val showDiagnosticsOverlay: Boolean = false,
+    val videoWidth: Int = 0,
+    val videoHeight: Int = 0,
     val showPlayerChannelDrawer: Boolean = false,
     val streamHealth: StreamHealthInfo = StreamHealthInfo(),
     val watchStats: List<WatchStatEntity> = emptyList(),
@@ -68,27 +88,43 @@ data class AshikaUiState(
     val finderQuery: String = "",
     val finderResults: List<ChannelEntity> = emptyList(),
     val pairingCode: String? = null,
-    val pairingQrBitmap: Bitmap? = null
+    val pairingQrBitmap: Bitmap? = null,
+    val epgUrl: String = "",
+    val epgLastUpdatedAt: Long = 0L,
+    val epgProgramsCount: Int = 0,
+    val epgMap: Map<String, ChannelEpgStatus> = emptyMap(),
+    val isLoadingEpg: Boolean = false,
+    val nowMillis: Long = System.currentTimeMillis(),
+    val appLanguage: AppLanguage = AppLanguage.BANGLA,
+    val isBanglaMode: Boolean = true
 )
 
 private data class LocalControlsState(
     val searchQuery: String = "",
+    val isSearchExpanded: Boolean = false,
     val selectedCategory: String = "All",
     val selectedTab: ChannelFilterTab = ChannelFilterTab.ALL,
     val currentChannel: ChannelEntity? = null,
     val isPlaying: Boolean = false,
     val isBuffering: Boolean = false,
     val isFullscreen: Boolean = false,
+    val isInAppPip: Boolean = false,
+    val showDiagnosticsOverlay: Boolean = false,
+    val videoWidth: Int = 0,
+    val videoHeight: Int = 0,
     val showPlayerChannelDrawer: Boolean = false,
     val streamHealth: StreamHealthInfo = StreamHealthInfo(),
     val isAdminUnlocked: Boolean = false,
     val isBusy: Boolean = false,
+    val isLoadingEpg: Boolean = false,
+    val nowMillis: Long = System.currentTimeMillis(),
     val finderQuery: String = "",
     val finderResults: List<ChannelEntity> = emptyList(),
     val pairingCode: String? = null,
     val pairingQrBitmap: Bitmap? = null
 )
 
+@OptIn(UnstableApi::class)
 class AshikaViewModel(application: Application) : AndroidViewModel(application) {
 
     private val database = AshikaDatabase.getInstance(application)
@@ -103,6 +139,78 @@ class AshikaViewModel(application: Application) : AndroidViewModel(application) 
 
     private var videoWidth = 0
     private var videoHeight = 0
+    private var measuredBitrateEstimateBps = 0L
+    private var downstreamBitrateBps = 0L
+    private var videoFormatBitrateBps = 0L
+    private var audioFormatBitrateBps = 0L
+    private var videoFrameRateFps = 0f
+    private var videoCodecLabel = ""
+    private var totalDroppedFrames = 0
+
+    private val analyticsListener = object : AnalyticsListener {
+        override fun onBandwidthEstimate(
+            eventTime: AnalyticsListener.EventTime,
+            totalLoadTimeMs: Int,
+            totalBytesLoaded: Long,
+            bitrateEstimate: Long
+        ) {
+            if (bitrateEstimate > 0L) {
+                measuredBitrateEstimateBps = bitrateEstimate
+            }
+        }
+
+        override fun onDownstreamFormatChanged(
+            eventTime: AnalyticsListener.EventTime,
+            mediaLoadData: MediaLoadData
+        ) {
+            val fmt = mediaLoadData.trackFormat ?: return
+            val br = fmt.bitrate.takeIf { it > 0 } ?: fmt.averageBitrate.takeIf { it > 0 } ?: 0
+            if (br > 0) {
+                downstreamBitrateBps = br.toLong()
+            }
+            if (fmt.frameRate > 0f) {
+                videoFrameRateFps = fmt.frameRate
+            }
+            refreshStreamHealth()
+        }
+
+        override fun onVideoInputFormatChanged(
+            eventTime: AnalyticsListener.EventTime,
+            format: Format,
+            decoderReuseEvaluation: DecoderReuseEvaluation?
+        ) {
+            if (format.width > 0 && format.height > 0) {
+                videoWidth = format.width
+                videoHeight = format.height
+            }
+            val br = format.bitrate.takeIf { it > 0 } ?: format.averageBitrate.takeIf { it > 0 } ?: 0
+            if (br > 0) videoFormatBitrateBps = br.toLong()
+            if (format.frameRate > 0f) videoFrameRateFps = format.frameRate
+            videoCodecLabel = format.codecs?.substringBefore('.')?.uppercase()
+                ?: format.sampleMimeType?.substringAfter('/')?.uppercase().orEmpty()
+            refreshStreamHealth()
+        }
+
+        override fun onAudioInputFormatChanged(
+            eventTime: AnalyticsListener.EventTime,
+            format: Format,
+            decoderReuseEvaluation: DecoderReuseEvaluation?
+        ) {
+            val br = format.bitrate.takeIf { it > 0 } ?: format.averageBitrate.takeIf { it > 0 } ?: 0
+            if (br > 0) audioFormatBitrateBps = br.toLong()
+            refreshStreamHealth()
+        }
+
+        override fun onDroppedVideoFrames(
+            eventTime: AnalyticsListener.EventTime,
+            droppedFrames: Int,
+            elapsedMs: Long
+        ) {
+            if (droppedFrames > 0) {
+                totalDroppedFrames += droppedFrames
+            }
+        }
+    }
 
     private val playerListener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -120,6 +228,9 @@ class AshikaViewModel(application: Application) : AndroidViewModel(application) 
         override fun onVideoSizeChanged(videoSize: VideoSize) {
             videoWidth = videoSize.width
             videoHeight = videoSize.height
+            controls.update {
+                it.copy(videoWidth = videoSize.width, videoHeight = videoSize.height)
+            }
             refreshStreamHealth()
         }
 
@@ -136,6 +247,12 @@ class AshikaViewModel(application: Application) : AndroidViewModel(application) 
                         isPlaying = false,
                         bufferedPercentage = exoPlayer.bufferedPercentage,
                         videoResolution = resolutionString(),
+                        bitrateLabel = formatBitrateLabel(effectiveBitrateBps()),
+                        frameRateLabel = formatFrameRateLabel(effectiveFrameRate()),
+                        codecLabel = videoCodecLabel.ifBlank { "—" },
+                        bitrateBps = effectiveBitrateBps(),
+                        frameRateFps = effectiveFrameRate(),
+                        droppedFrames = totalDroppedFrames,
                         errorMessage = error.localizedMessage ?: "Stream unavailable or unsupported format",
                         checkedAt = System.currentTimeMillis()
                     )
@@ -150,9 +267,9 @@ class AshikaViewModel(application: Application) : AndroidViewModel(application) 
         repository.playlistsFlow,
         repository.profilesFlow,
         repository.activeProfileFlow,
-        repository.activeFavoriteUrlsFlow
-    ) { channels, playlists, profiles, activeProfile, favUrls ->
-        LibrarySnapshot(channels, playlists, profiles, activeProfile, favUrls.toSet())
+        repository.activeFavoriteChannelsFlow
+    ) { channels, playlists, profiles, activeProfile, favChannels ->
+        LibrarySnapshot(channels, playlists, profiles, activeProfile, favChannels)
     }
 
     private val activityFlow = combine(
@@ -165,26 +282,53 @@ class AshikaViewModel(application: Application) : AndroidViewModel(application) 
         ActivitySnapshot(recentUrls, stats, matches, hasPin, lanUrl)
     }
 
+    private val epgFlow = combine(
+        repository.epgChannelsFlow,
+        repository.epgProgramsFlow,
+        repository.epgUrlFlow,
+        repository.epgLastUpdatedFlow
+    ) { epgChannels, epgPrograms, epgUrl, updatedAt ->
+        EpgSnapshot(epgChannels, epgPrograms, epgUrl, updatedAt)
+    }
+
     val uiState: StateFlow<AshikaUiState> = combine(
         libraryFlow,
         activityFlow,
+        epgFlow,
+        repository.appLanguageFlow,
         controls
-    ) { lib, act, ctrl ->
-        val baseCategories = listOf("All", "News", "Sports", "Entertainment", "Music")
+    ) { lib, act, epg, appLanguage, ctrl ->
         val dynamicCategories = lib.channels
             .map { it.groupTitle.trim() }
             .filter { it.isNotEmpty() }
             .distinctBy { it.lowercase() }
-            .filter { cat -> baseCategories.none { it.equals(cat, ignoreCase = true) } }
-            .sorted()
-        val categories = baseCategories + dynamicCategories
+            .sortedWith(
+                compareBy<String>(
+                    { it.equals("Other", ignoreCase = true) },
+                    { -lib.channels.count { ch -> ch.groupTitle.equals(it, ignoreCase = true) } },
+                    { it.lowercase() }
+                )
+            )
+        val categories = if (dynamicCategories.isEmpty()) {
+            listOf("All", "News", "Sports", "Entertainment", "Music")
+        } else {
+            listOf("All") + dynamicCategories
+        }
+
+        val epgMap = buildChannelEpgMap(
+            channels = lib.channels,
+            epgChannels = epg.channels,
+            epgPrograms = epg.programs,
+            nowMillis = ctrl.nowMillis
+        )
 
         val query = ctrl.searchQuery.trim().lowercase()
         val recentIndexMap = act.recentUrls.withIndex().associate { it.value to it.index }
 
+        val favUrls = lib.favoriteChannels.map { it.url }.toSet()
         val tabFiltered = when (ctrl.selectedTab) {
             ChannelFilterTab.ALL -> lib.channels
-            ChannelFilterTab.FAVORITES -> lib.channels.filter { lib.favoriteUrls.contains(it.url) }
+            ChannelFilterTab.FAVORITES -> lib.favoriteChannels
             ChannelFilterTab.RECENT -> lib.channels
                 .filter { recentIndexMap.containsKey(it.url) }
                 .sortedBy { recentIndexMap[it.url] ?: Int.MAX_VALUE }
@@ -192,10 +336,13 @@ class AshikaViewModel(application: Application) : AndroidViewModel(application) 
 
         val filtered = tabFiltered.filter { channel ->
             val catMatch = ctrl.selectedCategory == "All" ||
+                channel.groupTitle.equals(ctrl.selectedCategory, ignoreCase = true) ||
                 channel.groupTitle.contains(ctrl.selectedCategory, ignoreCase = true)
+            val epgNowTitle = epgMap[channel.url]?.now?.title.orEmpty().lowercase()
             val queryMatch = query.isEmpty() ||
                 channel.name.lowercase().contains(query) ||
-                channel.groupTitle.lowercase().contains(query)
+                channel.groupTitle.lowercase().contains(query) ||
+                epgNowTitle.contains(query)
             catMatch && queryMatch
         }
 
@@ -205,16 +352,22 @@ class AshikaViewModel(application: Application) : AndroidViewModel(application) 
             playlists = lib.playlists,
             profiles = lib.profiles,
             activeProfile = lib.activeProfile,
-            favoriteUrls = lib.favoriteUrls,
+            favoriteChannels = lib.favoriteChannels,
+            favoriteUrls = favUrls,
             recentUrls = act.recentUrls,
             categories = categories,
             selectedCategory = ctrl.selectedCategory,
             selectedTab = ctrl.selectedTab,
             searchQuery = ctrl.searchQuery,
+            isSearchExpanded = ctrl.isSearchExpanded,
             currentChannel = ctrl.currentChannel,
             isPlaying = ctrl.isPlaying,
             isBuffering = ctrl.isBuffering,
             isFullscreen = ctrl.isFullscreen,
+            isInAppPip = ctrl.isInAppPip,
+            showDiagnosticsOverlay = ctrl.showDiagnosticsOverlay,
+            videoWidth = ctrl.videoWidth,
+            videoHeight = ctrl.videoHeight,
             showPlayerChannelDrawer = ctrl.showPlayerChannelDrawer,
             streamHealth = ctrl.streamHealth,
             watchStats = act.stats,
@@ -226,7 +379,15 @@ class AshikaViewModel(application: Application) : AndroidViewModel(application) 
             finderQuery = ctrl.finderQuery,
             finderResults = ctrl.finderResults,
             pairingCode = ctrl.pairingCode,
-            pairingQrBitmap = ctrl.pairingQrBitmap
+            pairingQrBitmap = ctrl.pairingQrBitmap,
+            epgUrl = epg.url,
+            epgLastUpdatedAt = epg.lastUpdatedAt,
+            epgProgramsCount = epg.programs.size,
+            epgMap = epgMap,
+            isLoadingEpg = ctrl.isLoadingEpg,
+            nowMillis = ctrl.nowMillis,
+            appLanguage = appLanguage,
+            isBanglaMode = appLanguage == AppLanguage.BANGLA
         )
     }.stateIn(
         scope = viewModelScope,
@@ -236,6 +397,7 @@ class AshikaViewModel(application: Application) : AndroidViewModel(application) 
 
     init {
         exoPlayer.addListener(playerListener)
+        exoPlayer.addAnalyticsListener(analyticsListener)
         viewModelScope.launch {
             val seedResult = repository.ensureInitialized()
             seedResult?.onSuccess { count ->
@@ -245,35 +407,74 @@ class AshikaViewModel(application: Application) : AndroidViewModel(application) 
             }
         }
         viewModelScope.launch {
+            var tickCount = 0
             while (isActive) {
-                delay(5_000)
+                delay(1_000)
+                tickCount++
+                if (tickCount % 30 == 0) {
+                    controls.update { it.copy(nowMillis = System.currentTimeMillis()) }
+                }
                 val current = controls.value.currentChannel
-                if (current != null && exoPlayer.isPlaying) {
-                    repository.addWatchSeconds(current.url, current.name, 5L)
+                if (current != null) {
                     refreshStreamHealth()
+                    if (exoPlayer.isPlaying && tickCount % 5 == 0) {
+                        repository.addWatchSeconds(current.url, current.name, 5L)
+                    }
                 }
             }
         }
     }
 
+    @OptIn(UnstableApi::class)
     fun playChannel(channel: ChannelEntity) {
         videoWidth = 0
         videoHeight = 0
+        measuredBitrateEstimateBps = 0L
+        downstreamBitrateBps = 0L
+        videoFormatBitrateBps = 0L
+        audioFormatBitrateBps = 0L
+        videoFrameRateFps = 0f
+        videoCodecLabel = ""
+        totalDroppedFrames = 0
         controls.update {
             it.copy(
                 currentChannel = channel,
                 isBuffering = true,
+                videoWidth = 0,
+                videoHeight = 0,
                 streamHealth = StreamHealthInfo(
                     channelName = channel.name,
                     channelUrl = channel.url,
                     playbackStateLabel = "Connecting…",
                     isPlaying = false,
                     bufferedPercentage = 0,
-                    videoResolution = "—"
+                    videoResolution = "—",
+                    bitrateLabel = "Measuring…",
+                    frameRateLabel = "—"
                 )
             )
         }
-        exoPlayer.setMediaItem(MediaItem.fromUri(channel.url))
+        val headers = M3uParser.parseHeadersMap(channel.headersJson)
+        if (headers.isNotEmpty()) {
+            val userAgent = headers.entries.firstOrNull {
+                it.key.equals("User-Agent", ignoreCase = true)
+            }?.value ?: "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/125.0.0.0 Mobile Safari/537.36"
+            val extraHeaders = headers.filterKeys { !it.equals("User-Agent", ignoreCase = true) }
+            val httpFactory = DefaultHttpDataSource.Factory()
+                .setAllowCrossProtocolRedirects(true)
+                .setUserAgent(userAgent)
+                .apply {
+                    if (extraHeaders.isNotEmpty()) {
+                        setDefaultRequestProperties(extraHeaders)
+                    }
+                }
+            val mediaSource = DefaultMediaSourceFactory(getApplication<Application>())
+                .setDataSourceFactory(httpFactory)
+                .createMediaSource(MediaItem.fromUri(channel.url))
+            exoPlayer.setMediaSource(mediaSource)
+        } else {
+            exoPlayer.setMediaItem(MediaItem.fromUri(channel.url))
+        }
         exoPlayer.prepare()
         exoPlayer.playWhenReady = true
         viewModelScope.launch {
@@ -303,6 +504,9 @@ class AshikaViewModel(application: Application) : AndroidViewModel(application) 
                 isPlaying = false,
                 isBuffering = false,
                 isFullscreen = false,
+                isInAppPip = false,
+                videoWidth = 0,
+                videoHeight = 0,
                 showPlayerChannelDrawer = false,
                 streamHealth = StreamHealthInfo()
             )
@@ -319,15 +523,74 @@ class AshikaViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun setFullscreen(fullscreen: Boolean) {
-        controls.update { it.copy(isFullscreen = fullscreen) }
+        controls.update {
+            it.copy(
+                isFullscreen = fullscreen,
+                isInAppPip = if (fullscreen) false else it.isInAppPip
+            )
+        }
+    }
+
+    fun setInAppPip(enabled: Boolean) {
+        controls.update {
+            it.copy(
+                isInAppPip = enabled && it.currentChannel != null,
+                isFullscreen = if (enabled) false else it.isFullscreen,
+                showPlayerChannelDrawer = if (enabled) false else it.showPlayerChannelDrawer
+            )
+        }
+    }
+
+    fun toggleInAppPip() {
+        setInAppPip(!controls.value.isInAppPip)
+    }
+
+    fun getSafePipAspectRatio(): Rational {
+        return PipHelper.buildSafeAspectRatio(videoWidth, videoHeight)
     }
 
     fun togglePlayerChannelDrawer() {
         controls.update { it.copy(showPlayerChannelDrawer = !it.showPlayerChannelDrawer) }
     }
 
+    fun toggleDiagnosticsOverlay() {
+        controls.update { it.copy(showDiagnosticsOverlay = !it.showDiagnosticsOverlay) }
+        refreshStreamHealth()
+    }
+
     fun updateSearchQuery(query: String) {
         controls.update { it.copy(searchQuery = query) }
+    }
+
+    fun setAppLanguage(language: AppLanguage) {
+        viewModelScope.launch {
+            repository.setAppLanguage(language)
+            emitMessage("${language.nativeName} (${language.englishName})")
+        }
+    }
+
+    fun toggleBanglaMode() {
+        val next = if (uiState.value.appLanguage == AppLanguage.BANGLA) AppLanguage.ENGLISH else AppLanguage.BANGLA
+        setAppLanguage(next)
+    }
+
+    fun toggleSearchExpanded() {
+        controls.update {
+            val next = !it.isSearchExpanded
+            it.copy(
+                isSearchExpanded = next,
+                searchQuery = if (!next) "" else it.searchQuery
+            )
+        }
+    }
+
+    fun setSearchExpanded(expanded: Boolean) {
+        controls.update {
+            it.copy(
+                isSearchExpanded = expanded,
+                searchQuery = if (!expanded) "" else it.searchQuery
+            )
+        }
     }
 
     fun selectCategory(category: String) {
@@ -341,7 +604,11 @@ class AshikaViewModel(application: Application) : AndroidViewModel(application) 
     fun toggleFavorite(channel: ChannelEntity) {
         val profile = uiState.value.activeProfile
         viewModelScope.launch {
-            repository.toggleFavorite(profile, channel.url)
+            val isNowStarred = repository.toggleFavorite(profile, channel.url)
+            emitMessage(
+                if (isNowStarred) "Starred \"${channel.name}\""
+                else "Removed \"${channel.name}\" from Favorites"
+            )
         }
     }
 
@@ -359,6 +626,9 @@ class AshikaViewModel(application: Application) : AndroidViewModel(application) 
             return
         }
         viewModelScope.launch {
+            val existingTvgId = previousUrl?.let { prev ->
+                uiState.value.allChannels.firstOrNull { it.url == prev }?.tvgId
+            }.orEmpty()
             if (!previousUrl.isNullOrBlank() && previousUrl != cleanUrl) {
                 repository.deleteChannel(previousUrl)
             }
@@ -368,6 +638,7 @@ class AshikaViewModel(application: Application) : AndroidViewModel(application) 
                     name = cleanName,
                     groupTitle = category.trim().ifEmpty { "Other" },
                     logoUrl = logoUrl.trim(),
+                    tvgId = existingTvgId,
                     source = "manual"
                 )
             )
@@ -382,6 +653,16 @@ class AshikaViewModel(application: Application) : AndroidViewModel(application) 
             }
             repository.deleteChannel(channel.url)
             emitMessage("Deleted \"${channel.name}\"")
+        }
+    }
+
+    fun syncToffeeAndAllChannels() {
+        viewModelScope.launch {
+            controls.update { it.copy(isBusy = true) }
+            repository.syncToffeeAndAllChannels()
+                .onSuccess { count -> emitMessage("Synced $count Toffee & Bangladesh TV channels") }
+                .onFailure { err -> emitMessage("Sync failed: ${err.message}") }
+            controls.update { it.copy(isBusy = false) }
         }
     }
 
@@ -409,6 +690,52 @@ class AshikaViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             repository.removePlaylist(url)
             emitMessage("Removed saved playlist")
+        }
+    }
+
+    fun loadEpgUrl(url: String) {
+        viewModelScope.launch {
+            controls.update { it.copy(isLoadingEpg = true) }
+            repository.loadEpgFromUrl(url)
+                .onSuccess { count ->
+                    controls.update { it.copy(nowMillis = System.currentTimeMillis()) }
+                    emitMessage("Loaded $count EPG program entries")
+                }
+                .onFailure { err ->
+                    emitMessage("Could not load EPG: ${err.message}")
+                }
+            controls.update { it.copy(isLoadingEpg = false) }
+        }
+    }
+
+    fun importLocalEpg(contentResolver: ContentResolver, uri: Uri) {
+        viewModelScope.launch {
+            controls.update { it.copy(isLoadingEpg = true) }
+            repository.importLocalEpg(contentResolver, uri)
+                .onSuccess { count ->
+                    controls.update { it.copy(nowMillis = System.currentTimeMillis()) }
+                    emitMessage("Imported $count EPG programs")
+                }
+                .onFailure { err ->
+                    emitMessage("EPG import failed: ${err.message}")
+                }
+            controls.update { it.copy(isLoadingEpg = false) }
+        }
+    }
+
+    fun refreshEpg() {
+        val url = uiState.value.epgUrl
+        if (M3uParser.isValidStreamUrl(url)) {
+            loadEpgUrl(url)
+        } else {
+            emitMessage("Enter an XMLTV EPG URL first.")
+        }
+    }
+
+    fun clearEpg() {
+        viewModelScope.launch {
+            repository.clearEpgData()
+            emitMessage("Cleared EPG guide data")
         }
     }
 
@@ -474,6 +801,24 @@ class AshikaViewModel(application: Application) : AndroidViewModel(application) 
             controls.update { it.copy(streamHealth = StreamHealthInfo()) }
             return
         }
+        exoPlayer.videoFormat?.let { vf ->
+            if (vf.width > 0 && vf.height > 0) {
+                videoWidth = vf.width
+                videoHeight = vf.height
+            }
+            val br = vf.bitrate.takeIf { it > 0 } ?: vf.averageBitrate.takeIf { it > 0 } ?: 0
+            if (br > 0) videoFormatBitrateBps = br.toLong()
+            if (vf.frameRate > 0f) videoFrameRateFps = vf.frameRate
+            if (videoCodecLabel.isBlank()) {
+                videoCodecLabel = vf.codecs?.substringBefore('.')?.uppercase()
+                    ?: vf.sampleMimeType?.substringAfter('/')?.uppercase().orEmpty()
+            }
+        }
+        exoPlayer.audioFormat?.let { af ->
+            val br = af.bitrate.takeIf { it > 0 } ?: af.averageBitrate.takeIf { it > 0 } ?: 0
+            if (br > 0) audioFormatBitrateBps = br.toLong()
+        }
+
         val stateLabel = when (exoPlayer.playbackState) {
             Player.STATE_IDLE -> "Idle"
             Player.STATE_BUFFERING -> "Buffering"
@@ -481,6 +826,9 @@ class AshikaViewModel(application: Application) : AndroidViewModel(application) 
             Player.STATE_ENDED -> "Ended"
             else -> "Unknown"
         }
+        val bitrateBps = effectiveBitrateBps()
+        val fps = effectiveFrameRate()
+
         controls.update {
             it.copy(
                 streamHealth = StreamHealthInfo(
@@ -490,10 +838,51 @@ class AshikaViewModel(application: Application) : AndroidViewModel(application) 
                     isPlaying = exoPlayer.isPlaying,
                     bufferedPercentage = exoPlayer.bufferedPercentage,
                     videoResolution = resolutionString(),
+                    bitrateLabel = formatBitrateLabel(bitrateBps),
+                    frameRateLabel = formatFrameRateLabel(fps),
+                    codecLabel = videoCodecLabel.ifBlank { "—" },
+                    bitrateBps = bitrateBps,
+                    frameRateFps = fps,
+                    droppedFrames = totalDroppedFrames,
                     errorMessage = exoPlayer.playerError?.localizedMessage,
                     checkedAt = System.currentTimeMillis()
                 )
             )
+        }
+    }
+
+    private fun effectiveBitrateBps(): Long {
+        val combinedTrackBitrate = videoFormatBitrateBps + audioFormatBitrateBps
+        return when {
+            combinedTrackBitrate > 0L -> combinedTrackBitrate
+            downstreamBitrateBps > 0L -> downstreamBitrateBps
+            measuredBitrateEstimateBps > 0L -> measuredBitrateEstimateBps
+            else -> 0L
+        }
+    }
+
+    private fun effectiveFrameRate(): Float {
+        val formatFps = exoPlayer.videoFormat?.frameRate ?: 0f
+        return when {
+            formatFps > 0f -> formatFps
+            videoFrameRateFps > 0f -> videoFrameRateFps
+            else -> 0f
+        }
+    }
+
+    private fun formatBitrateLabel(bps: Long): String {
+        return when {
+            bps <= 0L -> "Measuring…"
+            bps >= 1_000_000L -> String.format(Locale.US, "%.2f Mbps", bps / 1_000_000.0)
+            else -> "${bps / 1_000L} kbps"
+        }
+    }
+
+    private fun formatFrameRateLabel(fps: Float): String {
+        return when {
+            fps <= 0f -> "Auto"
+            (fps % 1f) < 0.05f -> "${fps.toInt()} fps"
+            else -> String.format(Locale.US, "%.2f fps", fps)
         }
     }
 
@@ -582,6 +971,74 @@ class AshikaViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    private fun buildChannelEpgMap(
+        channels: List<ChannelEntity>,
+        epgChannels: List<EpgChannelEntity>,
+        epgPrograms: List<EpgProgramEntity>,
+        nowMillis: Long
+    ): Map<String, ChannelEpgStatus> {
+        if (epgPrograms.isEmpty() || channels.isEmpty()) return emptyMap()
+
+        val programsByIdLower = HashMap<String, MutableList<EpgProgramEntity>>()
+        for (prog in epgPrograms) {
+            val key = prog.channelId.trim().lowercase()
+            programsByIdLower.getOrPut(key) { ArrayList() }.add(prog)
+        }
+
+        val epgIdByNormName = HashMap<String, String>()
+        for (epgCh in epgChannels) {
+            val normDisplay = normalizeEpgKey(epgCh.displayName)
+            if (normDisplay.isNotEmpty()) {
+                epgIdByNormName.putIfAbsent(normDisplay, epgCh.epgId.trim().lowercase())
+            }
+            val normId = normalizeEpgKey(epgCh.epgId)
+            if (normId.isNotEmpty()) {
+                epgIdByNormName.putIfAbsent(normId, epgCh.epgId.trim().lowercase())
+            }
+        }
+        for (idKey in programsByIdLower.keys) {
+            val normId = normalizeEpgKey(idKey)
+            if (normId.isNotEmpty()) {
+                epgIdByNormName.putIfAbsent(normId, idKey)
+            }
+        }
+
+        val result = HashMap<String, ChannelEpgStatus>(channels.size)
+        for (channel in channels) {
+            val matchedKey = when {
+                channel.tvgId.isNotBlank() && programsByIdLower.containsKey(channel.tvgId.trim().lowercase()) ->
+                    channel.tvgId.trim().lowercase()
+                else -> epgIdByNormName[normalizeEpgKey(channel.name)]
+            } ?: continue
+
+            val progs = programsByIdLower[matchedKey] ?: continue
+            val currentIdx = progs.indexOfFirst { nowMillis in it.startMillis until it.endMillis }
+            val nowProg = if (currentIdx >= 0) progs[currentIdx] else null
+            val upcomingList = progs.filter { it.endMillis > nowMillis }.take(24)
+            val nextProg = if (nowProg != null) {
+                progs.firstOrNull { it.startMillis >= nowProg.endMillis }
+                    ?: progs.firstOrNull { it.startMillis > nowProg.startMillis }
+            } else {
+                upcomingList.firstOrNull()
+            }
+
+            if (nowProg != null || nextProg != null || upcomingList.isNotEmpty()) {
+                result[channel.url] = ChannelEpgStatus(
+                    now = nowProg,
+                    next = nextProg,
+                    upcoming = upcomingList
+                )
+            }
+        }
+        return result
+    }
+
+    private fun normalizeEpgKey(raw: String): String {
+        return raw.lowercase()
+            .replace(Regex("""\b(hd|fhd|sd|uhd|4k|live|tv)\b"""), "")
+            .replace(Regex("""[^a-z0-9]"""), "")
+    }
+
     private fun resolutionString(): String {
         return if (videoWidth > 0 && videoHeight > 0) "${videoWidth}×${videoHeight}" else "Audio / Pending"
     }
@@ -592,6 +1049,7 @@ class AshikaViewModel(application: Application) : AndroidViewModel(application) 
 
     override fun onCleared() {
         exoPlayer.removeListener(playerListener)
+        exoPlayer.removeAnalyticsListener(analyticsListener)
         exoPlayer.release()
         super.onCleared()
     }
@@ -601,7 +1059,7 @@ class AshikaViewModel(application: Application) : AndroidViewModel(application) 
         val playlists: List<PlaylistEntity>,
         val profiles: List<FamilyProfileEntity>,
         val activeProfile: String,
-        val favoriteUrls: Set<String>
+        val favoriteChannels: List<ChannelEntity>
     )
 
     private data class ActivitySnapshot(
@@ -610,5 +1068,12 @@ class AshikaViewModel(application: Application) : AndroidViewModel(application) 
         val matches: List<MatchEntryEntity>,
         val hasAdminPin: Boolean,
         val lanSyncUrl: String
+    )
+
+    private data class EpgSnapshot(
+        val channels: List<EpgChannelEntity>,
+        val programs: List<EpgProgramEntity>,
+        val url: String,
+        val lastUpdatedAt: Long
     )
 }

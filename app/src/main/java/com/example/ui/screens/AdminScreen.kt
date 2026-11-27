@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -14,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
@@ -56,6 +58,7 @@ fun AdminScreen(
     onEditChannel: (ChannelEntity) -> Unit,
     onDeleteChannel: (ChannelEntity) -> Unit,
     onRefreshBulkPlaylists: (String) -> Unit,
+    onBack: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var pinInput by remember { mutableStateOf("") }
@@ -63,11 +66,31 @@ fun AdminScreen(
         mutableStateOf(uiState.playlists.joinToString("\n") { it.url })
     }
 
+    if (onBack != null) {
+        BackHandler { onBack() }
+    }
+
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
+        if (onBack != null) {
+            item {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    IconButton(
+                        onClick = onBack,
+                        modifier = Modifier.minimumInteractiveComponentSize()
+                    ) {
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back to Menu")
+                    }
+                    Text("Admin & Channels", style = MaterialTheme.typography.headlineSmall)
+                }
+            }
+        }
         if (!uiState.isAdminUnlocked) {
             item {
                 Surface(
