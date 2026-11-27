@@ -29,6 +29,7 @@
     <string name="cd_previous_channel">Previous channel</string>
     <string name="cd_next_channel">Next channel</string>
     <string name="cd_fullscreen">Toggle fullscreen</string>
+    <string name="action_fullscreen">Full screen</string>
     <string name="cd_stop_player">Stop playback</string>
     <string name="cd_channel_drawer">Toggle player channel list</string>
     <string name="cd_close">Close</string>
