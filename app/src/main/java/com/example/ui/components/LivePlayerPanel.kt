@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import android.content.pm.ActivityInfo
 import android.graphics.Rect
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -899,16 +900,24 @@ fun FullscreenPlayerOverlay(
 ) {
     BackHandler { onExitFullscreen() }
 
-    // Use immersive system UI while the player is fullscreen, restoring it on exit.
+    // Lock the activity to landscape for true full-screen playback, then restore
+    // the user's previous orientation preference when leaving the player.
     val playerView = LocalView.current
     DisposableEffect(playerView) {
-        val window = playerView.context.findActivity()?.window
+        val activity = playerView.context.findActivity()
+        val previousOrientation = activity?.requestedOrientation
+        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+
+        val window = activity?.window
         val controller = window?.let { WindowInsetsControllerCompat(it, playerView) }
         controller?.systemBarsBehavior =
             WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         controller?.hide(WindowInsetsCompat.Type.systemBars())
         onDispose {
             controller?.show(WindowInsetsCompat.Type.systemBars())
+            if (previousOrientation != null) {
+                activity.requestedOrientation = previousOrientation
+            }
         }
     }
 
