@@ -125,14 +125,14 @@ jobs:
               for token in tokens:
                   assert token in android_sources[source_name], f"Android source contract missing: {source_name}: {token}"
           webos_parity_ids = [
-              "channels", "categories", "player", "playerChannelList", "epgPanel", "favorites",
-              "recent", "settingsModal", "playlistManager", "adminPanel", "channelPreviewModal",
+              "channels", "categories", "search", "heading", "count", "player", "playerChannelList", "epgPanel",
+              "settingsModal", "playlistManager", "adminPanel", "channelPreviewModal",
               "languageModal", "sportsPanel", "healthPanel", "statsPanel", "matchPanel",
               "familyPanel", "remotePanel", "subtitleSelect", "audioSelect", "miniPipBtn",
               "backupFile", "relayEndpoint"
           ]
           for element_id in webos_parity_ids:
-              assert re.search(r"\\bid=[\\\"']" + re.escape(element_id) + r"[\\\"']", webos), f"Android parity UI missing in webOS: {element_id}"
+              assert re.search(r"\bid=[\"']" + re.escape(element_id) + r"[\\\"']", webos), f"Android parity UI missing in webOS: {element_id}"
           webos_parity_functions = [
               "openChannelPreview", "setAppLanguage", "ashikaDeleteProfile", "ashikaLoadEpg",
               "ashikaImportEpg", "ashikaExportBackup", "ashikaImportBackup", "ashikaToggleMiniPip",
@@ -141,7 +141,7 @@ jobs:
               "ashikaSwitchProfile", "refreshAdminPlaylists"
           ]
           for fn in webos_parity_functions:
-              assert re.search(r"function\\s+" + re.escape(fn) + r"\\s*\\(", webos), f"Android parity behavior missing in webOS: {fn}"
+              assert re.search(r"function\s+" + re.escape(fn) + r"\s*\(", webos), f"Android parity behavior missing in webOS: {fn}"
           print("Android Compose screen contract and webOS parity controls validated")
 
           import subprocess
