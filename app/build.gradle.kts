@@ -16,8 +16,8 @@ android {
     applicationId = "com.aistudio.ashikatv.rmtvyq"
     minSdk = 24
     targetSdk = 36
-    versionCode = 14
-    versionName = "6.3.4" // Clipboard playlist import and verified installer release; corrected release APK verification path
+    versionCode = 15
+    versionName = "6.3.5" // Clipboard playlist import and verified installer release; corrected release APK verification path
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
