@@ -88,6 +88,16 @@ jobs:
           for fn in ("ashikaLoadEpg", "ashikaParseXmltv", "ashikaSelectSubtitle", "ashikaSelectAudio", "ashikaToggleMiniPip", "ashikaExportBackup", "ashikaImportBackup", "ashikaExtractToffeeInput", "ashikaFetchToffee", "ashikaParseJsonPlaylist", "ashikaParseHeaderQuery"):
               assert ("function " + fn + "(") in webos, f"Missing feature function: {fn}"
           assert "video.canPlayType" in webos and "xhr.setRequestHeader" in webos, "Native HLS / header-aware HLS playback is missing"
+          for feature in ("relayEndpoint", "relayKey", "relayStatus"):
+              assert feature in webos, f"Missing relay UI: {feature}"
+          for fn in ("ashikaSaveRelaySettings", "ashikaTestRelay", "ashikaBuildRelayUrl"):
+              assert ("function " + fn + "(") in webos, f"Missing relay integration: {fn}"
+          assert "playbackUrl" in webos and "Buffered Ahead" in webos, "Relay playback / expanded diagnostics are missing"
+          import subprocess
+          subprocess.run(["node", "--check", "relay/api/relay.js"], check=True)
+          json.loads(pathlib.Path("relay/package.json").read_text())
+          json.loads(pathlib.Path("relay/vercel.json").read_text())
+          print("Secure relay source syntax and project configuration validated")
           # Parse every inline JavaScript block to catch syntax errors before packaging.
           import subprocess, tempfile
           scripts = re.findall(r"<script\b(?![^>]*\bsrc=)[^>]*>([\s\S]*?)</script>", webos, re.I)
@@ -106,14 +116,14 @@ jobs:
           mkdir -p dist
           ares-config --profile tv
           ares-package --no-minify --outdir dist webos
-          test -s dist/com.ashika.livetv_9.2.0_all.ipk
-          ares-package --info dist/com.ashika.livetv_9.2.0_all.ipk
+          test -s dist/com.ashika.livetv_9.3.0_all.ipk
+          ares-package --info dist/com.ashika.livetv_9.3.0_all.ipk
 
       - name: Verify packaged IPK contents
         run: |
           python - <<'PY'
           import io, pathlib, subprocess, tarfile
-          package = pathlib.Path("dist/com.ashika.livetv_9.2.0_all.ipk")
+          package = pathlib.Path("dist/com.ashika.livetv_9.3.0_all.ipk")
           members = subprocess.check_output(["ar", "t", str(package)], text=True).splitlines()
           data_name = next((name for name in members if name.startswith("data.tar")), None)
           assert data_name, f"No application payload found in IPK: {members}"
@@ -130,7 +140,7 @@ jobs:
       - name: Upload IPK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Ashika-TV-webOS-IPK-v9.2.0
+          name: Ashika-TV-webOS-IPK-v9.3.0
           path: dist/*.ipk
           retention-days: 90
 
@@ -138,8 +148,8 @@ jobs:
         if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: webos-v9.2.0
+          tag_name: webos-v9.3.0
           target_commitish: main
-          name: Ashika TV webOS v9.2.0
+          name: Ashika TV webOS v9.3.0
           generate_release_notes: true
           files: dist/*.ipk

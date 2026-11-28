@@ -275,6 +275,13 @@ body.ashika-mini-pip #playerBox{position:fixed!important;right:14px;bottom:14px;
   <input class="field" id="lanSyncUrl" placeholder="http://192.168.0.103:8080/api/channels">
   <button class="action" onclick="ashikaSyncPhonePlaylist()">Sync Now</button>
 
+  <h4 style="margin:14px 0 6px">🔐 Secure Stream Relay (Optional)</h4>
+  <p style="font-size:12px;color:var(--muted)">Use your deployed Ashika relay for authorized non-DRM streams that need supported headers or HLS CORS handling.</p>
+  <input class="field" id="relayEndpoint" placeholder="https://your-project.vercel.app/api/relay">
+  <input class="field" id="relayKey" type="password" placeholder="Relay API key">
+  <div class="btn-row"><button class="action primary" onclick="ashikaSaveRelaySettings()">Save Relay</button><button class="action" onclick="ashikaTestRelay()">Test Relay</button><button class="action danger" onclick="ashikaClearRelaySettings()">Disable Relay</button></div>
+  <div id="relayStatus" class="featureResult">Relay is disabled. Direct playback remains the default.</div>
+
   <h4 style="margin:14px 0 6px">Backup & Restore (TV local data)</h4>
   <p style="font-size:12px;color:var(--muted)">Export/import channels, playlists, profiles, favorites, recent channels, watch stats, matches and EPG metadata.</p>
   <div class="btn-row"><button class="action" onclick="ashikaExportBackup()">Export Backup JSON</button><button class="action" onclick="document.getElementById('backupFile').click()">Import Backup JSON</button></div>
@@ -357,6 +364,7 @@ let hlsInstance = null;
 let epgData = JSON.parse(localStorage.getItem("ashika_epg_data") || "[]");
 let epgChannelNames = JSON.parse(localStorage.getItem("ashika_epg_channels") || "{}");
 let watchTimerStart = 0;
+let lastPlaybackError = "";
 
 function loadProfileArrays() {
  const p = profiles.find(x => x.name === activeProfile) || profiles[0];
@@ -487,6 +495,37 @@ function render() {
  });
 }
 
+function ashikaGetRelayConfig(){
+ return {endpoint:(localStorage.getItem("ashika_relay_endpoint")||"").trim().replace(/\/$/,""),key:localStorage.getItem("ashika_relay_key")||""};
+}
+function ashikaSaveRelaySettings(){
+ const endpoint=document.getElementById("relayEndpoint").value.trim().replace(/\/$/,""),key=document.getElementById("relayKey").value.trim(),status=document.getElementById("relayStatus");
+ if(!endpoint||!/^https:\/\//i.test(endpoint)||!endpoint.endsWith("/api/relay")||!key){status.textContent="Enter an HTTPS Vercel endpoint ending in /api/relay and its relay key.";return;}
+ localStorage.setItem("ashika_relay_endpoint",endpoint);localStorage.setItem("ashika_relay_key",key);
+ status.textContent="Relay settings saved. New channel playbacks will use the relay.";
+}
+function ashikaClearRelaySettings(){
+ localStorage.removeItem("ashika_relay_endpoint");localStorage.removeItem("ashika_relay_key");
+ const endpoint=document.getElementById("relayEndpoint"),key=document.getElementById("relayKey"),status=document.getElementById("relayStatus");
+ if(endpoint)endpoint.value="";if(key)key.value="";if(status)status.textContent="Relay disabled. Direct playback will be used.";
+}
+async function ashikaTestRelay(){
+ const cfg=ashikaGetRelayConfig(),status=document.getElementById("relayStatus");
+ if(!cfg.endpoint||!cfg.key){status.textContent="Save the relay endpoint and key first.";return;}
+ status.textContent="Testing relay connection...";
+ try{const u=cfg.endpoint+"?health=1&key="+encodeURIComponent(cfg.key),r=await fetch(u,{method:"GET"});const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||("HTTP "+r.status));status.textContent="Relay online: "+d.service+" v"+d.version+". Host allowlist controls which streams can be relayed.";}
+ catch(e){status.textContent="Relay test failed: "+e.message+". Check deployment, key and Vercel environment variables.";}
+}
+function ashikaBuildRelayUrl(sourceUrl,headers){
+ const cfg=ashikaGetRelayConfig();if(!cfg.endpoint||!cfg.key)return "";
+ try{
+  const q=new URLSearchParams();q.set("url",sourceUrl);q.set("key",cfg.key);
+  const safe={};Object.keys(headers||{}).forEach(k=>{if(/^(user-agent|referer|origin|cookie|accept|accept-language)$/i.test(k))safe[k]=String(headers[k]);});
+  if(Object.keys(safe).length){const bytes=unescape(encodeURIComponent(JSON.stringify(safe)));q.set("h",btoa(bytes).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,""));}
+  return cfg.endpoint+"?"+q.toString();
+ }catch(_){return "";}
+}
+
 function playChannel(c) {
  commitWatchTime();
  const video = document.getElementById("player");
@@ -497,20 +536,24 @@ function playChannel(c) {
  if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
  video.pause();video.removeAttribute("src");video.load();ashikaResetTrackSelectors();
  const headers=c.headers&&typeof c.headers==="object"?c.headers:{};
- const hasHeaders=Object.keys(headers).length>0;
- video.onerror=()=>{const code=video.error?video.error.code:0;document.getElementById("playingName").textContent=c.name+" • Playback error "+code;document.getElementById("healthResult").textContent="Playback error "+code+". Check stream URL, codec, required headers, network and provider availability.";};
+ const relayedUrl=ashikaBuildRelayUrl(c.url,headers);
+ const playbackUrl=relayedUrl||c.url;
+ const playbackHeaders=relayedUrl?{}:headers;
+ const hasHeaders=Object.keys(playbackHeaders).length>0;
+ lastPlaybackError="";
+ video.onerror=()=>{const code=video.error?video.error.code:0;lastPlaybackError="HTMLMediaError "+code;document.getElementById("playingName").textContent=c.name+" • Playback error "+code;document.getElementById("healthResult").textContent="Playback error "+code+". Check stream URL, codec, relay allowlist/key, network and provider availability.";};
  video.onloadedmetadata=ashikaRefreshTracks;
  const isHls=/\.m3u8(\?|$)/i.test(c.url);
  const nativeHls=isHls&&!hasHeaders&&video.canPlayType("application/vnd.apple.mpegurl")!=="";
- if(nativeHls){video.src=c.url;video.play().catch(()=>{});}
+ if(nativeHls){video.src=playbackUrl;video.play().catch(e=>{lastPlaybackError=e.message||"Playback rejected";});}
  else if(isHls&&window.Hls&&Hls.isSupported()){
-  hlsInstance=new Hls({enableWorker:false,lowLatencyMode:false,backBufferLength:30,xhrSetup:(xhr)=>{Object.keys(headers).forEach(k=>{try{xhr.setRequestHeader(k,String(headers[k]));}catch(_){}});}});
-  hlsInstance.on(Hls.Events.ERROR,(_event,data)=>{if(data&&data.fatal){document.getElementById("playingName").textContent=c.name+" • HLS "+data.details;if(data.type===Hls.ErrorTypes.NETWORK_ERROR)hlsInstance.startLoad();else if(data.type===Hls.ErrorTypes.MEDIA_ERROR)hlsInstance.recoverMediaError();else{hlsInstance.destroy();hlsInstance=null;}}});
+  hlsInstance=new Hls({enableWorker:false,lowLatencyMode:false,backBufferLength:30,xhrSetup:(xhr)=>{Object.keys(playbackHeaders).forEach(k=>{try{xhr.setRequestHeader(k,String(playbackHeaders[k]));}catch(_){}});}});
+  hlsInstance.on(Hls.Events.ERROR,(_event,data)=>{if(data&&data.fatal){lastPlaybackError="HLS "+data.details;document.getElementById("playingName").textContent=c.name+" • HLS "+data.details;if(data.type===Hls.ErrorTypes.NETWORK_ERROR)hlsInstance.startLoad();else if(data.type===Hls.ErrorTypes.MEDIA_ERROR)hlsInstance.recoverMediaError();else{hlsInstance.destroy();hlsInstance=null;}}});
   hlsInstance.on(Hls.Events.MANIFEST_PARSED,()=>video.play().catch(()=>{}));
   hlsInstance.on(Hls.Events.SUBTITLE_TRACKS_UPDATED,ashikaRefreshTracks);
   hlsInstance.on(Hls.Events.AUDIO_TRACKS_UPDATED,ashikaRefreshTracks);
-  hlsInstance.loadSource(c.url);hlsInstance.attachMedia(video);
- }else{if(hasHeaders)document.getElementById("healthResult").textContent="This stream requires custom HTTP headers. LG native video cannot send custom headers; only HLS.js playback can apply them. If HLS.js is unavailable, this stream may not play.";video.src=c.url;video.play().catch(()=>{});}
+  hlsInstance.loadSource(playbackUrl);hlsInstance.attachMedia(video);
+ }else{if(hasHeaders)document.getElementById("healthResult").textContent="This stream requires custom HTTP headers. LG native video cannot send custom headers; only HLS.js playback can apply them. If HLS.js is unavailable, this stream may not play.";video.src=playbackUrl;video.play().catch(e=>{lastPlaybackError=e.message||"Playback rejected";});}
 
  recent = [c.url, ...recent.filter(x => x !== c.url)].slice(0, 30);
  persistProfiles();
@@ -875,6 +918,10 @@ function ashikaSwitchProfile(name) {
  persistProfiles();
  activeProfile = name;
  loadProfileArrays();
+const relayCfg=ashikaGetRelayConfig();
+if(document.getElementById("relayEndpoint"))document.getElementById("relayEndpoint").value=relayCfg.endpoint;
+if(document.getElementById("relayKey"))document.getElementById("relayKey").value=relayCfg.key;
+if(document.getElementById("relayStatus")&&relayCfg.endpoint)document.getElementById("relayStatus").textContent="Relay settings loaded. Test the connection before playback.";
  persistProfiles();
  ashikaRenderProfiles();
  render();
@@ -927,15 +974,24 @@ function ashikaCheckHealth() {
  const out = document.getElementById("healthResult");
  if (!currentChannelUrl) { out.textContent = "Play a channel first."; return; }
  const netStates = ["NETWORK_EMPTY", "NETWORK_IDLE", "NETWORK_LOADING", "NETWORK_NO_SOURCE"];
+ const readyStates = ["HAVE_NOTHING","HAVE_METADATA","HAVE_CURRENT_DATA","HAVE_FUTURE_DATA","HAVE_ENOUGH_DATA"];
  const res = videoEl.videoWidth ? videoEl.videoWidth + "x" + videoEl.videoHeight : "Audio / Pending";
- let text = "Channel: " + document.getElementById("playingName").textContent +
+ let buffered=0;try{if(videoEl.buffered.length)buffered=Math.max(0,videoEl.buffered.end(videoEl.buffered.length-1)-videoEl.currentTime);}catch(_){}
+ const cfg=ashikaGetRelayConfig();
+ let report = "Channel: " + document.getElementById("playingName").textContent +
   "\nNetwork State: " + (netStates[videoEl.networkState] || "Unknown") +
-  "\nReady State: " + videoEl.readyState +
-  "\nResolution: " + res;
- if (videoEl.error) text += "\nPlayer Error Code: " + videoEl.error.code;
- else if (videoEl.readyState >= 3) text += "\nStatus: Healthy & streaming";
- else text += "\nStatus: Buffering or awaiting stream data";
- out.textContent = text;
+  "\nReady State: " + (readyStates[videoEl.readyState] || videoEl.readyState) +
+  "\nResolution: " + res +
+  "\nCurrent Time: " + (Number.isFinite(videoEl.currentTime)?videoEl.currentTime.toFixed(1)+"s":"N/A") +
+  "\nDuration: " + (Number.isFinite(videoEl.duration)?videoEl.duration.toFixed(1)+"s":"Live / Unknown") +
+  "\nBuffered Ahead: " + buffered.toFixed(1) + "s" +
+  "\nPaused: " + videoEl.paused +
+  "\nRelay: " + (cfg.endpoint?"Configured":"Disabled");
+ if (hlsInstance) { const level=hlsInstance.currentLevel>=0?hlsInstance.levels[hlsInstance.currentLevel]:null;report+="\nHLS Level: "+hlsInstance.currentLevel+"\nHLS Bitrate: "+(level&&level.bitrate?Math.round(level.bitrate/1000)+" kbps":"Auto / Unknown"); }
+ if (videoEl.error) report += "\nPlayer Error Code: " + videoEl.error.code;
+ if(lastPlaybackError)report+="\nLast Error: "+lastPlaybackError;
+ report += videoEl.readyState >= 3 && !videoEl.error ? "\nStatus: Playing / ready" : "\nStatus: Buffering or awaiting stream data";
+ out.textContent = report;
 }
 async function ashikaSyncPhonePlaylist() {
  const url = (document.getElementById("lanSyncUrl").value || "").trim();
@@ -1064,7 +1120,7 @@ function ashikaRenderEpg(){
 function ashikaClearEpg(){epgData=[];epgChannelNames={};localStorage.removeItem("ashika_epg_data");localStorage.removeItem("ashika_epg_channels");ashikaRenderEpg();}
 
 function openToffee() { window.open("https://toffeelive.com", "_blank", "noopener"); }
-function showAbout() { alert("Ashika Live TV v9.2.0\nFree and authorized M3U / HLS streams only."); }
+function showAbout() { alert("Ashika Live TV v9.3.0\nFree and authorized M3U / HLS streams only."); }
 function dismissSplash() {
  const s = document.getElementById("ashikaSplash");
  if (s) { s.style.opacity = "0"; setTimeout(() => s.remove(), 400); }
