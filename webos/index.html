@@ -646,6 +646,7 @@ async function loadPlaylist(urlOverride) {
    localStorage.setItem("ashika_playlists", JSON.stringify(savedPlaylists));
   }
   status.textContent = parsed.length + " channels loaded!";
+  const autoEpg=localStorage.getItem("ashika_playlist_epg_url");if(autoEpg){document.getElementById("epgUrl").value=autoEpg;ashikaLoadEpg();}
   renderPlaylistManager();
   renderPlayerChannels();
   render();
@@ -660,6 +661,7 @@ function uploadPlaylistFile(event) {
  reader.onload = () => {
   const parsed = parseM3uText(reader.result, "file");
   mergeChannels(parsed);
+  const autoEpg=localStorage.getItem("ashika_playlist_epg_url");if(autoEpg){document.getElementById("epgUrl").value=autoEpg;ashikaLoadEpg();}
   render();
   renderPlayerChannels();
   document.getElementById("status").textContent = parsed.length + " channel(s) imported from file.";
@@ -943,7 +945,7 @@ async function ashikaSyncPhonePlaylist() {
   if (!res.ok) throw new Error("HTTP " + res.status);
   const data = await res.json();
   const incoming = (data.channels || []).filter(c => c && c.name && isValidHttpUrl(c.url))
-   .map(c => ({ name: c.name, group: c.group || "Other", logo: c.logo || "", url: c.url, source: "phone" }));
+   .map(c => ({ name: c.name, group: c.group || "Other", logo: c.logo || c.logoUrl || "", tvgId: c.tvgId || "", url: c.url, source: "phone", headers: c.headers || (c.headersJson ? (()=>{try{return JSON.parse(c.headersJson)}catch(_){return {}}})() : {}) }));
   mergeChannels(incoming);
   render(); renderPlayerChannels();
   status.textContent = "Companion sync imported " + incoming.length + " channels.";
