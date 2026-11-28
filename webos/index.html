@@ -618,14 +618,14 @@ function render() {
    persistProfiles();
    render();
   };
-  top.append(logoWrap, heartBtn);
+  top.appendChild(logoWrap); top.appendChild(heartBtn);
 
   const info = document.createElement("div");
   const title = document.createElement("strong");
   title.textContent = c.name;
   const sub = document.createElement("small");
   sub.textContent = c.group || "Other";
-  info.append(title, sub);
+  info.appendChild(title); info.appendChild(sub);
 
   const actions = document.createElement("div");
   actions.className = "ch-actions";
@@ -641,9 +641,9 @@ function render() {
   previewBtn.className = "action";
   previewBtn.textContent = "Preview";
   previewBtn.onclick = e => { e.stopPropagation(); openChannelPreview(c); };
-  actions.append(previewBtn, editBtn, delBtn);
+  actions.appendChild(previewBtn); actions.appendChild(editBtn); actions.appendChild(delBtn);
 
-  card.append(top, info, actions);
+  card.appendChild(top); card.appendChild(info); card.appendChild(actions);
   box.appendChild(card);
  });
 }
@@ -682,7 +682,7 @@ function ashikaBuildShelf(title,list,kind){
   if(c.logo&&isValidHttpUrl(c.logo)){const img=document.createElement("img");img.src=c.logo;img.alt="";img.onerror=()=>{logo.textContent="📺";};logo.appendChild(img);}else logo.textContent="📺";
   const name=document.createElement("strong");name.textContent=c.name;
   const group=document.createElement("small");group.textContent=c.group||"Live TV";
-  b.append(logo,name,group);track.appendChild(b);
+  b.appendChild(logo);b.appendChild(name);b.appendChild(group);track.appendChild(b);
  });
  section.appendChild(track);return section;
 }
@@ -961,7 +961,7 @@ function renderPlaylistManager() {
    localStorage.setItem("ashika_playlists", JSON.stringify(savedPlaylists));
    renderPlaylistManager();
   };
-  btns.append(ref, rem); row.append(label, btns); box.appendChild(row);
+  btns.appendChild(ref);btns.appendChild(rem);row.appendChild(label);row.appendChild(btns);box.appendChild(row);
  });
 }
 
@@ -1051,7 +1051,7 @@ function renderAdminChannels() {
   const btns = document.createElement("div"); btns.className = "btn-row";
   const ed = document.createElement("button"); ed.className = "action"; ed.textContent = "Edit"; ed.onclick = () => openChannelModal(c);
   const dl = document.createElement("button"); dl.className = "action danger"; dl.textContent = "Delete"; dl.onclick = () => deleteChannel(c);
-  btns.append(ed, dl); row.append(lbl, btns); box.appendChild(row);
+  btns.appendChild(ed);btns.appendChild(dl);row.appendChild(lbl);row.appendChild(btns);box.appendChild(row);
  });
 }
 async function refreshAdminPlaylists() {
@@ -1098,7 +1098,7 @@ function ashikaAskFinder() {
   const lbl = document.createElement("span"); lbl.textContent = c.name + " (" + (c.group || "Other") + ")";
   const playBtn = document.createElement("button"); playBtn.className = "action primary"; playBtn.textContent = "Play";
   playBtn.onclick = () => playChannel(c);
-  row.append(lbl, playBtn); box.appendChild(row);
+  row.appendChild(lbl);row.appendChild(playBtn);box.appendChild(row);
  });
 }
 function ashikaCreatePair() {
@@ -1120,7 +1120,7 @@ function ashikaRenderMatches() {
   const lbl = document.createElement("span"); lbl.textContent = m.teams + " | " + m.score + " | " + m.time;
   const del = document.createElement("button"); del.className = "action danger"; del.textContent = "Delete";
   del.onclick = () => { list.splice(i, 1); localStorage.setItem("ashika_matches", JSON.stringify(list)); ashikaRenderMatches(); };
-  row.append(lbl, del); box.appendChild(row);
+  row.appendChild(lbl);row.appendChild(del);box.appendChild(row);
  });
 }
 function ashikaAddMatch() {
