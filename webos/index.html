@@ -858,7 +858,7 @@ async function loadPlaylist(urlOverride) {
     if(!res.ok)throw new Error("HTTP "+res.status);
     const body=await res.text();
     if(!body||body.trim().length<8)throw new Error("Empty playlist response");
-    if(/^\\s*(<!doctype html|<html)/i.test(body))throw new Error("Server returned HTML, not a playlist");
+    if(/^\s*(<!doctype html|<html)/i.test(body))throw new Error("Server returned HTML, not a playlist");
     parsed=parseM3uText(body,"playlist");
     if(!parsed.length)throw new Error("Playlist contains no valid HTTP stream URLs");
     loadedFrom=candidate;
