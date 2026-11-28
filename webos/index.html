@@ -1008,7 +1008,7 @@ function deleteChannel(c) {
 async function sha256(str) {
  if (window.crypto && crypto.subtle) {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+  return Array.from(new Uint8Array(buf)).map(b => ("0" + b.toString(16)).slice(-2)).join("");
  }
  return btoa(str);
 }
@@ -1233,7 +1233,7 @@ videoEl.addEventListener("timeupdate", () => {
 function ashikaRenderStats() {
  const storedStats = ashikaReadJson("ashika_watch_stats", {});
  const stats = storedStats && typeof storedStats === "object" && !Array.isArray(storedStats) ? storedStats : {};
- const entries = Object.entries(stats).sort((a, b) => b[1] - a[1]);
+ const entries = Object.keys(stats).map(key => [key, stats[key]]).sort((a, b) => b[1] - a[1]);
  const total = entries.reduce((s, x) => s + x[1], 0);
  const fmt = s => Math.floor(s / 60) + "m " + Math.floor(s % 60) + "s";
  document.getElementById("watchStats").textContent =
