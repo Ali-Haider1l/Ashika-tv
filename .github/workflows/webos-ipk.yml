@@ -206,14 +206,14 @@ jobs:
           mkdir -p dist
           ares-config --profile tv
           ares-package --no-minify --outdir dist webos-build
-          test -s dist/com.ashika.livetv_9.5.1_all.ipk
-          ares-package --info dist/com.ashika.livetv_9.5.1_all.ipk
+          test -s dist/com.ashika.livetv_9.5.2_all.ipk
+          ares-package --info dist/com.ashika.livetv_9.5.2_all.ipk
 
       - name: Verify packaged IPK contents
         run: |
           python - <<'PY'
           import io, pathlib, subprocess, tarfile
-          package = pathlib.Path("dist/com.ashika.livetv_9.5.1_all.ipk")
+          package = pathlib.Path("dist/com.ashika.livetv_9.5.2_all.ipk")
           members = subprocess.check_output(["ar", "t", str(package)], text=True).splitlines()
           data_name = next((name for name in members if name.startswith("data.tar")), None)
           assert data_name, f"No application payload found in IPK: {members}"
