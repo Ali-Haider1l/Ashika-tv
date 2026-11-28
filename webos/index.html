@@ -16,6 +16,9 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-famil
 button,input,textarea,select{font-family:inherit}
 button{cursor:pointer}
 .channel:focus,button:focus,input:focus,textarea:focus,select:focus{outline:3px solid var(--primary);outline-offset:2px}
+.header-actions{display:flex;align-items:center;gap:8px}
+#channelPreviewModal .modalbox{width:min(620px,100%)}
+#previewChannelDetails{white-space:pre-wrap;overflow-wrap:anywhere;max-height:48vh;overflow-y:auto;line-height:1.6}
 header{height:64px;background:var(--header);display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-bottom:1px solid var(--border)}
 .header-left{display:flex;align-items:center;gap:12px}
 .menu-btn{background:none;border:0;color:var(--text);font-size:24px;padding:6px 10px;border-radius:8px}
@@ -106,7 +109,7 @@ body.ashika-mini-pip #playerBox{position:fixed!important;right:14px;bottom:14px;
   <div class="logo">ASHIKA LIVE TV</div>
   <span class="live">● LIVE</span>
  </div>
- <button class="profile-pill" id="headerProfileBtn" onclick="ashikaOpenFeature('familyPanel')">👤 Default</button>
+ <div class="header-actions"><button class="profile-pill" id="languageBtn" onclick="openLanguagePicker()">বাংলা / EN</button><button class="profile-pill" id="headerProfileBtn" onclick="ashikaOpenFeature('familyPanel')">👤 Default</button></div>
 </header>
 
 <div class="layout">
@@ -122,6 +125,7 @@ body.ashika-mini-pip #playerBox{position:fixed!important;right:14px;bottom:14px;
   <button onclick="ashikaOpenFeature('healthPanel')">🩺 Stream Health</button>
   <button onclick="ashikaOpenFeature('familyPanel')">👨‍👩‍👧 Family Profiles</button>
   <button onclick="openAdmin()">🛡 Admin Panel</button>
+  <button onclick="openLanguagePicker()">🌐 Language / ভাষা</button>
   <button onclick="showAbout()">ⓘ About</button>
  </aside>
 
@@ -238,6 +242,7 @@ body.ashika-mini-pip #playerBox{position:fixed!important;right:14px;bottom:14px;
    <input class="field" id="newProfileName" placeholder="New profile name">
    <div class="btn-row">
     <button class="action primary" onclick="ashikaAddProfile()">＋ Add Profile</button>
+    <button class="action danger" onclick="ashikaDeleteProfile()">Delete Active Profile</button>
     <button class="action" onclick="ashikaCloseFeatures()">Close</button>
    </div>
    <div class="featureResult" id="profileInfo"></div>
@@ -295,6 +300,34 @@ body.ashika-mini-pip #playerBox{position:fixed!important;right:14px;bottom:14px;
 
   <h4 style="margin:14px 0 6px">Saved Playlists</h4>
   <div id="playlistManager" class="adminList"></div>
+ </div>
+</div>
+
+<!-- Channel Preview Modal -->
+<div class="modal" id="channelPreviewModal">
+ <div class="modalbox">
+  <h3 id="previewChannelName">Channel Preview</h3>
+  <div id="previewChannelDetails" class="featureResult"></div>
+  <div class="btn-row">
+   <button class="action primary" id="previewPlayBtn">▶ Play</button>
+   <button class="action" id="previewFavoriteBtn">♡ Favorite</button>
+   <button class="action" id="previewEditBtn">✎ Edit</button>
+   <button class="action danger" id="previewDeleteBtn">Delete</button>
+   <button class="action" onclick="closeChannelPreview()">Close</button>
+  </div>
+ </div>
+</div>
+
+<!-- Language Selector -->
+<div class="modal" id="languageModal">
+ <div class="modalbox">
+  <h3>Choose Language / ভাষা নির্বাচন</h3>
+  <p style="color:var(--muted)">Select the app display language.</p>
+  <div class="btn-row">
+   <button class="action primary" onclick="setAppLanguage('bn')">বাংলা</button>
+   <button class="action primary" onclick="setAppLanguage('en')">English</button>
+   <button class="action" onclick="document.getElementById('languageModal').style.display='none'">Close</button>
+  </div>
  </div>
 </div>
 
@@ -494,7 +527,11 @@ function render() {
   delBtn.className = "action danger";
   delBtn.textContent = "Delete";
   delBtn.onclick = e => { e.stopPropagation(); deleteChannel(c); };
-  actions.append(editBtn, delBtn);
+  const previewBtn = document.createElement("button");
+  previewBtn.className = "action";
+  previewBtn.textContent = "Preview";
+  previewBtn.onclick = e => { e.stopPropagation(); openChannelPreview(c); };
+  actions.append(previewBtn, editBtn, delBtn);
 
   card.append(top, info, actions);
   box.appendChild(card);
@@ -911,6 +948,45 @@ function ashikaAddMatch() {
  ["matchTeams", "matchTime", "matchScore"].forEach(id => document.getElementById(id).value = "");
  ashikaRenderMatches();
 }
+
+let ashikaLanguage = localStorage.getItem("ashika_language") === "bn" ? "bn" : "en";
+function openLanguagePicker(){document.getElementById("languageModal").style.display="flex";}
+function setAppLanguage(language){
+ ashikaLanguage=language==="bn"?"bn":"en";localStorage.setItem("ashika_language",ashikaLanguage);document.documentElement.lang=ashikaLanguage;
+ const bn=ashikaLanguage==="bn",nav=document.querySelectorAll("#sidebar > button");
+ const labels=bn?["▣ সব চ্যানেল","♥ পছন্দের তালিকা","◷ সম্প্রতি দেখা","📅 টিভি গাইড / EPG","▤ প্লেলিস্ট ও সিঙ্ক","📺 টফি লাইভ","🏏 লাইভ স্পোর্টস","🔎 চ্যানেল খুঁজুন","🩺 স্ট্রিম স্বাস্থ্য","👨‍👩‍👧 ফ্যামিলি প্রোফাইল","🛡 অ্যাডমিন প্যানেল","🌐 ভাষা","ⓘ পরিচিতি"]:["▣ All Channels","♥ My Favorites","◷ Recently Watched","📅 TV Guide / EPG","▤ Playlists & Sync","📺 Toffee Live","🏏 Live Sports","🔎 Channel Finder","🩺 Stream Health","👨‍👩‍👧 Family Profiles","🛡 Admin Panel","🌐 Language","ⓘ About"];
+ nav.forEach((el,i)=>{if(labels[i])el.textContent=labels[i];});
+ const hero=document.querySelector(".hero h2");if(hero)hero.textContent=bn?"আশিকা লাইভ টিভিতে স্বাগতম":"Welcome to Ashika Live TV";
+ const desc=document.querySelector(".hero p");if(desc)desc.textContent=bn?"M3U প্লেলিস্ট, HLS প্লেব্যাক, প্রোফাইল এবং স্ট্রিম ডায়াগনস্টিকসহ আপনার পছন্দের লাইভ চ্যানেল দেখুন।":"Watch your favourite live channels in one place with M3U playlists, HLS playback, profiles, and stream diagnostics.";
+ const first=document.querySelector(".hero .btn-row button:first-child"),second=document.querySelector(".hero .btn-row button:nth-child(2)");
+ if(first)first.textContent=bn?"＋ প্লেলিস্ট যোগ করুন":"＋ Add Playlist";if(second)second.textContent=bn?"＋ চ্যানেল যোগ করুন":"＋ Add Channel";
+ const lb=document.getElementById("languageBtn");if(lb)lb.textContent=bn?"English":"বাংলা";
+ document.getElementById("languageModal").style.display="none";
+}
+function openChannelPreview(channel){
+ if(!channel)return;document.getElementById("previewChannelName").textContent=channel.name||"Channel";
+ const lines=[(ashikaLanguage==="bn"?"ক্যাটাগরি: ":"Category: ")+(channel.group||"Other"),(ashikaLanguage==="bn"?"স্ট্রিম URL: ":"Stream URL: ")+(channel.url||""),(ashikaLanguage==="bn"?"লোগো: ":"Logo: ")+(channel.logo||"—"),(ashikaLanguage==="bn"?"উৎস: ":"Source: ")+(channel.source||"Manual")];
+ const norm=x=>String(x||"").toLowerCase().replace(/[^a-z0-9]/g,"");
+ const related=epgData.filter(p=>(channel.tvgId&&p.channel===channel.tvgId)||norm(p.channelName)===norm(channel.name)||norm(p.channel)===norm(channel.name)).sort((a,b)=>a.start-b.start);
+ const now=Date.now(),current=related.find(p=>p.start<=now&&p.stop>now),upcoming=related.filter(p=>p.start>now).slice(0,5);
+ if(current)lines.push((ashikaLanguage==="bn"?"এখন চলছে: ":"Now: ")+current.title+" ("+new Date(current.start).toLocaleTimeString()+"–"+new Date(current.stop).toLocaleTimeString()+")");
+ if(upcoming.length){lines.push(ashikaLanguage==="bn"?"পরবর্তী অনুষ্ঠান:":"Upcoming:");upcoming.forEach(p=>lines.push("• "+new Date(p.start).toLocaleTimeString()+" — "+p.title));}
+ document.getElementById("previewChannelDetails").textContent=lines.join("\n");
+ const fav=document.getElementById("previewFavoriteBtn");const updateFav=()=>{fav.textContent=favorites.includes(channel.url)?"♥ Favorited":"♡ Favorite";};updateFav();
+ fav.onclick=()=>{favorites=favorites.includes(channel.url)?favorites.filter(x=>x!==channel.url):[...favorites,channel.url];persistProfiles();updateFav();render();};
+ document.getElementById("previewPlayBtn").onclick=()=>{closeChannelPreview();playChannel(channel);};
+ document.getElementById("previewEditBtn").onclick=()=>{closeChannelPreview();openChannelModal(channel);};
+ document.getElementById("previewDeleteBtn").onclick=()=>{closeChannelPreview();deleteChannel(channel);};
+ document.getElementById("channelPreviewModal").style.display="flex";
+}
+function closeChannelPreview(){document.getElementById("channelPreviewModal").style.display="none";}
+function ashikaDeleteProfile(){
+ if(profiles.length<=1){alert(ashikaLanguage==="bn"?"কমপক্ষে একটি প্রোফাইল রাখতে হবে।":"At least one profile must remain.");return;}
+ if(!confirm((ashikaLanguage==="bn"?"প্রোফাইল মুছে ফেলবেন: ":"Delete profile: ")+activeProfile+"?"))return;
+ persistProfiles();profiles=profiles.filter(p=>p.name!==activeProfile);activeProfile=profiles[0].name;
+ loadProfileArrays();persistProfiles();ashikaRenderProfiles();render();
+}
+
 function ashikaRenderProfiles() {
  const sel = document.getElementById("familySelect");
  sel.innerHTML = "";
@@ -1191,7 +1267,7 @@ if (!localStorage.getItem("ashika_seeded")) {
  // Avoid auto-fetching third-party playlists on LG webOS startup because many block CORS.
  // The default source remains saved for manual loading in Playlist Settings.
 }
-window.addEventListener("load", () => setTimeout(dismissSplash, 1100));
+window.addEventListener("load", () => { setAppLanguage(ashikaLanguage); setTimeout(dismissSplash, 1100); });
 window.addEventListener("beforeunload", () => { commitWatchTime(); persistProfiles(); });
 </script>
 </body>
