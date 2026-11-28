@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ashika Live TV</title>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+<style>
+*{box-sizing:border-box}
+:root{
+ --bg:#080b18;--header:#11152a;--card:#151a30;--card2:#201c3b;--plum:#292044;
+ --border:#2e3454;--accent:#8055d6;--primary:#b69cff;--live:#ed3159;--rose:#ff6688;
+ --text:#f4f3ff;--muted:#a8acbe;
+}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;overflow:hidden}
+button,input,textarea,select{font-family:inherit}
+button{cursor:pointer}
+.channel:focus,button:focus,input:focus,textarea:focus,select:focus{outline:3px solid var(--primary);outline-offset:2px}
+header{height:64px;background:var(--header);display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-bottom:1px solid var(--border)}
+.header-left{display:flex;align-items:center;gap:12px}
+.menu-btn{background:none;border:0;color:var(--text);font-size:24px;padding:6px 10px;border-radius:8px}
+.logo{font-size:19px;font-weight:800;color:var(--primary);letter-spacing:.5px}
+.live{background:var(--live);color:#fff;padding:4px 9px;border-radius:6px;font-size:11px;font-weight:700}
+.profile-pill{background:var(--card2);color:var(--primary);border:1px solid #4c3c70;padding:7px 12px;border-radius:20px;font-size:13px;font-weight:600}
+.layout{display:flex;height:calc(100vh - 64px);overflow:hidden}
+aside{width:225px;background:#101429;padding:16px 10px;flex-shrink:0;height:100%;overflow-y:auto;border-right:1px solid var(--border)}
+aside button{display:block;width:100%;text-align:left;background:none;color:#c6c8d8;border:0;padding:12px 14px;border-radius:10px;font-size:14px;margin-bottom:4px}
+aside button:hover,aside button.active{background:var(--plum);color:#fff;font-weight:600}
+main{flex:1;min-width:0;height:100%;overflow-y:auto;padding:18px;overscroll-behavior:contain}
+.hero{padding:22px;border-radius:16px;background:linear-gradient(120deg,#39205e,#151d42);border:1px solid #4c3c70;margin-bottom:16px}
+.hero h2{margin:0 0 6px;font-size:23px}
+.hero p{margin:0 0 14px;color:var(--muted);font-size:14px}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap}
+.action{background:#24213e;color:#fff;border:1px solid #4c3c70;padding:9px 14px;border-radius:20px;font-size:13px;font-weight:600}
+.action.primary,.action:hover{background:var(--accent);border-color:var(--primary)}
+.action.danger{border-color:#7a273d;color:#ff8ea6}
+.action.danger:hover{background:#7b1020;color:#fff}
+.search{width:100%;padding:13px 15px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:#fff;font-size:15px;margin-bottom:12px}
+.categories{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.categories button{background:#24213e;color:#fff;border:1px solid #4c3c70;padding:8px 14px;border-radius:20px;font-size:13px}
+.categories button.active{background:var(--accent);border-color:var(--primary)}
+.section{display:flex;justify-content:space-between;align-items:center;margin:10px 0 12px}
+.section h3{margin:0}
+.channels{display:grid;grid-template-columns:repeat(auto-fill,minmax(165px,1fr));gap:12px;padding-bottom:36px}
+.channel{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;cursor:pointer;display:flex;flex-direction:column;justify-content:space-between;gap:10px;min-height:145px}
+.channel:hover,.channel.playing{border-color:var(--primary);background:var(--card2)}
+.ch-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.ch-logo{width:42px;height:42px;border-radius:10px;background:#24213e;display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:22px;flex-shrink:0}
+.ch-logo img{width:100%;height:100%;object-fit:contain;padding:4px}
+.heart{background:none;border:0;color:var(--rose);font-size:20px;padding:4px 6px}
+.channel strong{display:block;font-size:14px;line-height:1.3}
+.channel small{color:var(--muted);font-size:12px}
+.ch-actions{display:flex;gap:6px;flex-wrap:wrap}
+.ch-actions button{padding:5px 10px;font-size:11px;border-radius:8px}
+#playerBox{display:none;background:#000;border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:18px}
+.playerLayout{display:flex;align-items:stretch;background:#080b18}
+.playerStage{flex:1;min-width:0;background:#000}
+.playerStage video{width:100%;max-height:52vh;aspect-ratio:16/9;background:#000;display:block}
+.playerbar{padding:10px 12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:var(--header)}
+.playerbar strong{margin-right:auto;font-size:14px;color:var(--primary)}
+.playerSide{width:240px;flex-shrink:0;background:var(--card);padding:12px;max-height:52vh;overflow-y:auto;border-left:1px solid var(--border)}
+.playerLayout.channels-hidden .playerSide{display:none}
+.playerSide h4{margin:0 0 10px;font-size:14px;color:var(--primary)}
+.playerChannel{display:block;width:100%;text-align:left;background:#24213e;color:#fff;border:1px solid #393454;padding:9px 10px;margin-bottom:6px;border-radius:8px;font-size:13px}
+.playerChannel.active{background:var(--accent);border-color:var(--primary);font-weight:700}
+.empty{grid-column:1/-1;padding:34px;text-align:center;color:var(--muted);background:var(--card);border:1px solid var(--border);border-radius:14px}
+.featureTools{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 16px}
+.featurePanel{display:none;background:var(--card);border:1px solid #393454;border-radius:14px;padding:16px;margin:12px 0 18px}
+.featurePanel h3{margin-top:0;color:var(--primary)}
+.field{width:100%;padding:11px 12px;margin:6px 0 10px;background:#090e20;color:#fff;border:1px solid #444;border-radius:8px;font-size:14px}
+.featureResult{background:#24213e;padding:12px;border-radius:10px;margin:10px 0;white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;line-height:1.5}
+.adminList{max-height:220px;overflow-y:auto;margin:10px 0}
+.adminItem{background:#24213e;padding:10px;margin:6px 0;border-radius:8px;display:flex;justify-content:space-between;gap:8px;align-items:center}
+.adminItem span{font-size:13px;word-break:break-word}
+.modal{display:none;position:fixed;inset:0;z-index:1000;background:#000c;align-items:center;justify-content:center;padding:16px}
+.modalbox{background:#171c32;border:1px solid #393454;padding:20px;border-radius:14px;width:min(460px,100%);max-height:90vh;overflow-y:auto}
+#adminPanel .modalbox{width:min(640px,100%)}
+#qrImage{display:none;width:180px;height:180px;background:#fff;padding:8px;margin:10px auto;border-radius:10px}
+#ashikaSplash{position:fixed;z-index:99999;inset:0;background:linear-gradient(135deg,#080b18,#39205e,#11152a);display:flex;align-items:center;justify-content:center;text-align:center;transition:opacity .4s}
+.splashTitle{font-size:30px;font-weight:800;color:#d5c4ff;letter-spacing:2px}
+.splashSub{color:#ddd;margin-top:10px}
+@media(max-width:760px){
+ aside{display:none;position:fixed;top:64px;left:0;bottom:0;z-index:900;box-shadow:8px 0 24px #000a}
+ aside.open{display:block}
+ .playerLayout{flex-direction:column}
+ .playerSide{width:100%;max-height:180px;border-left:0;border-top:1px solid var(--border)}
+ main{padding:12px}
+}
+</style>
+</head>
+<body>
+
+<div id="ashikaSplash" onclick="dismissSplash()">
+ <div>
+  <div class="splashTitle">ASHIKA LIVE TV</div>
+  <div class="splashSub">Your entertainment starts here</div>
+  <div style="margin-top:18px;color:#c8b2ff;font-size:13px">● LOADING</div>
+ </div>
+</div>
+
+<header>
+ <div class="header-left">
+  <button class="menu-btn" aria-label="Toggle Menu" onclick="toggleMenu()">☰</button>
+  <div class="logo">ASHIKA LIVE TV</div>
+  <span class="live">● LIVE</span>
+ </div>
+ <button class="profile-pill" id="headerProfileBtn" onclick="ashikaOpenFeature('familyPanel')">👤 Default</button>
+</header>
+
+<div class="layout">
+ <aside id="sidebar">
+  <button class="active" onclick="showPage('all',this)">▣ All Channels</button>
+  <button onclick="showPage('favorites',this)">♥ My Favorites</button>
+  <button onclick="showPage('recent',this)">◷ Recently Watched</button>
+  <button onclick="openToffee()">📺 Toffee Live</button>
+  <button onclick="openSettings()">⚙ Settings / Playlist</button>
+  <button onclick="openAdmin()">🛡 Admin Panel</button>
+  <button onclick="showAbout()">ⓘ About</button>
+ </aside>
+
+ <main>
+  <div class="hero">
+   <h2>Welcome to Ashika Live TV</h2>
+   <p>Watch your favourite live channels in one place with M3U playlists, HLS playback, profiles, and stream diagnostics.</p>
+   <div class="btn-row">
+    <button class="action primary" onclick="openSettings()">＋ Add Playlist</button>
+    <button class="action" onclick="openChannelModal()">＋ Add Channel</button>
+   </div>
+  </div>
+
+  <div id="playerBox">
+   <div class="playerLayout" id="playerLayout">
+    <div class="playerStage">
+     <video id="player" controls autoplay playsinline></video>
+     <div class="playerbar">
+      <strong id="playingName">Now Playing</strong>
+      <button class="action" onclick="changeChannel(-1)">◀ PREV</button>
+      <button class="action" onclick="changeChannel(1)">NEXT ▶</button>
+      <button class="action" onclick="toggleChannelList()">CHANNELS</button>
+      <button class="action" onclick="fullscreenPlayer()">FULLSCREEN</button>
+      <button class="action danger" onclick="stopPlayer()">STOP</button>
+     </div>
+    </div>
+    <div class="playerSide">
+     <h4>📺 Channel List</h4>
+     <div id="playerChannelList"></div>
+    </div>
+   </div>
+  </div>
+
+  <input class="search" id="search" placeholder="⌕ Search channels by name or category..." oninput="render()">
+  <div class="categories" id="categories"></div>
+
+  <div class="featureTools">
+   <button class="action" onclick="ashikaOpenFeature('aiPanel')">🔎 Channel Finder</button>
+   <button class="action" onclick="ashikaOpenFeature('healthPanel')">🩺 Stream Health</button>
+   <button class="action" onclick="ashikaOpenFeature('statsPanel')">📊 Watch Stats</button>
+   <button class="action" onclick="ashikaOpenFeature('matchPanel')">⚽ Match Center</button>
+   <button class="action" onclick="ashikaOpenFeature('familyPanel')">👨‍👩‍👧 Profiles</button>
+   <button class="action" onclick="ashikaOpenFeature('remotePanel')">📱 QR Pairing</button>
+  </div>
+
+  <div class="featurePanel" id="aiPanel">
+   <h3>🔎 Smart Channel Finder</h3>
+   <input class="field" id="aiQuestion" placeholder="Example: sports, news, music, favorites, recent">
+   <div class="btn-row">
+    <button class="action primary" onclick="ashikaAskFinder()">Find Channels</button>
+    <button class="action" onclick="ashikaCloseFeatures()">Close</button>
+   </div>
+   <div id="aiResults" class="adminList"></div>
+  </div>
+
+  <div class="featurePanel" id="healthPanel">
+   <h3>🩺 Stream Health Checker</h3>
+   <div class="btn-row">
+    <button class="action primary" onclick="ashikaCheckHealth()">Check Current Stream</button>
+    <button class="action" onclick="ashikaCloseFeatures()">Close</button>
+   </div>
+   <div id="healthResult" class="featureResult">Play a channel first, then check its live playback state.</div>
+  </div>
+
+  <div class="featurePanel" id="statsPanel">
+   <h3>📊 Watch Statistics</h3>
+   <div id="watchStats" class="featureResult">No watch data yet.</div>
+   <div class="btn-row">
+    <button class="action primary" onclick="ashikaRenderStats()">Refresh</button>
+    <button class="action danger" onclick="ashikaResetStats()">Reset Stats</button>
+    <button class="action" onclick="ashikaCloseFeatures()">Close</button>
+   </div>
+  </div>
+
+  <div class="featurePanel" id="matchPanel">
+   <h3>⚽ Live Match Center</h3>
+   <input class="field" id="matchTeams" placeholder="Teams (e.g. Bangladesh vs India)">
+   <input class="field" id="matchTime" placeholder="Match time / status">
+   <input class="field" id="matchScore" placeholder="Score (e.g. 1 - 0)">
+   <div class="btn-row">
+    <button class="action primary" onclick="ashikaAddMatch()">Add Match</button>
+    <button class="action" onclick="ashikaCloseFeatures()">Close</button>
+   </div>
+   <div id="matchList" class="adminList"></div>
+  </div>
+
+  <div class="featurePanel" id="familyPanel">
+   <h3>👨‍👩‍👧 Family Profiles</h3>
+   <p style="font-size:13px;color:var(--muted)">Each profile keeps separate Favorites and Recently Watched lists locally.</p>
+   <select class="field" id="familySelect" onchange="ashikaSwitchProfile(this.value)"></select>
+   <input class="field" id="newProfileName" placeholder="New profile name">
+   <div class="btn-row">
+    <button class="action primary" onclick="ashikaAddProfile()">＋ Add Profile</button>
+    <button class="action" onclick="ashikaCloseFeatures()">Close</button>
+   </div>
+   <div class="featureResult" id="profileInfo"></div>
+  </div>
+
+  <div class="featurePanel" id="remotePanel">
+   <h3>📱 QR Pairing Display</h3>
+   <p style="font-size:13px;color:var(--muted)">Generate a temporary 6-digit pairing code for companion pairing.</p>
+   <div class="btn-row">
+    <button class="action primary" onclick="ashikaCreatePair()">Generate Pairing Code</button>
+    <button class="action" onclick="ashikaCloseFeatures()">Close</button>
+   </div>
+   <div class="featureResult" id="pairCode">No pairing code generated.</div>
+   <img id="qrImage" alt="Pairing QR code">
+  </div>
+
+  <div class="section"><h3 id="heading">All Channels</h3><small id="count">0 Channels</small></div>
+  <div class="channels" id="channels"></div>
+ </main>
+</div>
+
+<!-- Playlist Settings Modal -->
+<div class="modal" id="settingsModal">
+ <div class="modalbox">
+  <h3>Playlist & Sync Settings</h3>
+  <p style="font-size:13px;color:var(--muted)">Enter an authorized M3U / M3U8 URL or import a local playlist file.</p>
+  <input class="field" id="playlistUrl" placeholder="https://example.com/playlist.m3u">
+  <div class="btn-row">
+   <button class="action primary" onclick="loadPlaylist()">Load Playlist</button>
+   <button class="action" onclick="closeSettings()">Close</button>
+  </div>
+  <p id="status" style="font-size:13px;color:var(--primary)"></p>
+
+  <div class="adminItem" style="margin-top:12px">
+   <span><strong>Upload M3U File</strong></span>
+   <input type="file" id="playlistFile" accept=".m3u,.m3u8,audio/x-mpegurl,application/vnd.apple.mpegurl" onchange="uploadPlaylistFile(event)">
+  </div>
+
+  <h4 style="margin:14px 0 6px">Phone-to-TV Companion Sync (Optional)</h4>
+  <input class="field" id="lanSyncUrl" placeholder="http://192.168.0.103:8080/api/channels">
+  <button class="action" onclick="ashikaSyncPhonePlaylist()">Sync Now</button>
+
+  <h4 style="margin:14px 0 6px">Saved Playlists</h4>
+  <div id="playlistManager" class="adminList"></div>
+ </div>
+</div>
+
+<!-- Add / Edit Channel Modal -->
+<div class="modal" id="channelModal">
+ <div class="modalbox">
+  <h3 id="channelModalTitle">＋ Add Channel</h3>
+  <input class="field" id="chName" placeholder="Channel Name">
+  <input class="field" id="chUrl" placeholder="Authorized Stream URL (http/https)">
+  <input class="field" id="chCategory" placeholder="Category (News, Sports, Music...)">
+  <input class="field" id="chLogo" placeholder="Logo URL (optional)">
+  <div class="btn-row">
+   <button class="action primary" onclick="saveChannelForm()">Save Channel</button>
+   <button class="action" onclick="closeChannelModal()">Cancel</button>
+  </div>
+  <p id="channelFormStatus" style="font-size:13px;color:var(--rose)"></p>
+ </div>
+</div>
+
+<!-- Admin Modal -->
+<div class="modal" id="adminPanel">
+ <div class="modalbox">
+  <h3>🛡 Ashika Admin Panel</h3>
+  <div id="adminLogin">
+   <p id="adminMessage" style="font-size:13px;color:var(--muted)">Enter your Admin PIN.</p>
+   <input class="field" id="adminPin" type="password" inputmode="numeric" placeholder="4+ digit Admin PIN">
+   <div class="btn-row">
+    <button class="action primary" onclick="adminLogin()">Continue</button>
+    <button class="action" onclick="closeAdmin()">Close</button>
+   </div>
+  </div>
+  <div id="adminDashboard" style="display:none">
+   <h4>Channel Management</h4>
+   <div class="btn-row">
+    <button class="action primary" onclick="openChannelModal()">＋ Add Channel</button>
+   </div>
+   <div class="adminList" id="adminChannelList"></div>
+   <hr style="border-color:var(--border)">
+   <h4>Bulk M3U Playlist Management</h4>
+   <textarea class="field" id="adminPlaylists" rows="4" placeholder="One playlist URL per line"></textarea>
+   <div class="btn-row">
+    <button class="action primary" onclick="refreshAdminPlaylists()">Save & Refresh All</button>
+    <button class="action" onclick="adminLogout()">Log Out</button>
+    <button class="action" onclick="closeAdmin()">Close</button>
+   </div>
+   <p id="adminStatus" style="font-size:13px;color:var(--primary)"></p>
+  </div>
+ </div>
+</div>
+
+<script>
+const DEFAULT_PLAYLIST = "https://github.com/abusaeeidx/Mrgify-BDIX-IPTV/raw/main/playlist.m3u";
+const KOLKATA_TV = { name: "Kolkata TV", group: "India News", logo: "", url: "https://d35j504z0x2vu2.cloudfront.net/v1/master/0bc8e8376bd8417a1b6761138aa41c26c7309312/kolkata-tv/index.m3u8", source: "built-in" };
+let channels = JSON.parse(localStorage.getItem("ashika_channels") || "[]");
+if (!channels.some(c => c.url === KOLKATA_TV.url)) {
+ channels.unshift(KOLKATA_TV);
+ localStorage.setItem("ashika_channels", JSON.stringify(channels));
+}
+let savedPlaylists = JSON.parse(localStorage.getItem("ashika_playlists") || "[]");
+let profiles = JSON.parse(localStorage.getItem("ashika_profiles") || "null");
+let activeProfile = localStorage.getItem("ashika_active_profile") || "Default";
+if (!Array.isArray(profiles) || !profiles.length) {
+ profiles = [{ name: "Default", favorites: JSON.parse(localStorage.getItem("ashika_favs") || "[]"), recent: JSON.parse(localStorage.getItem("ashika_recent") || "[]") }];
+}
+let favorites = [];
+let recent = [];
+let currentChannelUrl = "";
+let editingChannelUrl = null;
+let category = "All";
+let page = "all";
+let hlsInstance = null;
+let watchTimerStart = 0;
+
+function loadProfileArrays() {
+ const p = profiles.find(x => x.name === activeProfile) || profiles[0];
+ activeProfile = p.name;
+ favorites = Array.isArray(p.favorites) ? [...p.favorites] : [];
+ recent = Array.isArray(p.recent) ? [...p.recent] : [];
+ document.getElementById("headerProfileBtn").textContent = "👤 " + activeProfile;
+}
+function persistProfiles() {
+ const p = profiles.find(x => x.name === activeProfile);
+ if (p) { p.favorites = [...favorites]; p.recent = [...recent]; }
+ localStorage.setItem("ashika_profiles", JSON.stringify(profiles));
+ localStorage.setItem("ashika_active_profile", activeProfile);
+}
+function persistChannels() {
+ localStorage.setItem("ashika_channels", JSON.stringify(channels));
+}
+function isValidHttpUrl(u) {
+ return /^https?:\/\/.+/i.test((u || "").trim());
+}
+function toggleMenu() {
+ document.getElementById("sidebar").classList.toggle("open");
+}
+function closeMenuMobile() {
+ document.getElementById("sidebar").classList.remove("open");
+}
+function setCategory(c) {
+ category = c;
+ render();
+}
+function showPage(p, btn) {
+ page = p;
+ document.querySelectorAll("aside button").forEach(x => x.classList.remove("active"));
+ if (btn) btn.classList.add("active");
+ document.getElementById("heading").textContent =
+  p === "favorites" ? "My Favorites (" + activeProfile + ")" :
+  p === "recent" ? "Recently Watched (" + activeProfile + ")" : "All Channels";
+ closeMenuMobile();
+ render();
+}
+function renderCategories() {
+ const base = ["All", "News", "Sports", "Entertainment", "Music"];
+ const extra = [...new Set(channels.map(c => (c.group || "Other").trim()).filter(Boolean))]
+  .filter(g => !base.some(b => b.toLowerCase() === g.toLowerCase())).sort();
+ const box = document.getElementById("categories");
+ box.innerHTML = "";
+ [...base, ...extra].forEach(cat => {
+  const b = document.createElement("button");
+  b.textContent = cat;
+  if (category.toLowerCase() === cat.toLowerCase()) b.classList.add("active");
+  b.onclick = () => setCategory(cat);
+  box.appendChild(b);
+ });
+}
+function getFilteredChannels() {
+ const q = document.getElementById("search").value.trim().toLowerCase();
+ return channels.filter(c =>
+  (page !== "favorites" || favorites.includes(c.url)) &&
+  (page !== "recent" || recent.includes(c.url)) &&
+  (category === "All" || (c.group || "").toLowerCase().includes(category.toLowerCase())) &&
+  (!q || c.name.toLowerCase().includes(q) || (c.group || "").toLowerCase().includes(q))
+ );
+}
+function render() {
+ renderCategories();
+ const list = getFilteredChannels();
+ document.getElementById("count").textContent = list.length + " Channels";
+ const box = document.getElementById("channels");
+ box.innerHTML = "";
+ if (!list.length) {
+  box.innerHTML = '<div class="empty">No channels found.<br><br>Load an authorized M3U playlist or add a channel.</div>';
+  return;
+ }
+ list.forEach(c => {
+  const card = document.createElement("div");
+  card.className = "channel" + (c.url === currentChannelUrl ? " playing" : "");
+  card.tabIndex = 0;
+  card.onclick = () => playChannel(c);
+
+  const top = document.createElement("div");
+  top.className = "ch-top";
+
+  const logoWrap = document.createElement("div");
+  logoWrap.className = "ch-logo";
+  if (c.logo && isValidHttpUrl(c.logo)) {
+   const img = document.createElement("img");
+   img.src = c.logo;
+   img.alt = c.name;
+   img.onerror = () => { logoWrap.textContent = "📺"; };
+   logoWrap.appendChild(img);
+  } else {
+   logoWrap.textContent = "📺";
+  }
+
+  const heartBtn = document.createElement("button");
+  heartBtn.className = "heart";
+  heartBtn.textContent = favorites.includes(c.url) ? "♥" : "♡";
+  heartBtn.title = "Toggle Favorite";
+  heartBtn.onclick = e => {
+   e.stopPropagation();
+   favorites = favorites.includes(c.url) ? favorites.filter(x => x !== c.url) : [...favorites, c.url];
+   persistProfiles();
+   render();
+  };
+  top.append(logoWrap, heartBtn);
+
+  const info = document.createElement("div");
+  const title = document.createElement("strong");
+  title.textContent = c.name;
+  const sub = document.createElement("small");
+  sub.textContent = c.group || "Other";
+  info.append(title, sub);
+
+  const actions = document.createElement("div");
+  actions.className = "ch-actions";
+  const editBtn = document.createElement("button");
+  editBtn.className = "action";
+  editBtn.textContent = "Edit";
+  editBtn.onclick = e => { e.stopPropagation(); openChannelModal(c); };
+  const delBtn = document.createElement("button");
+  delBtn.className = "action danger";
+  delBtn.textContent = "Delete";
+  delBtn.onclick = e => { e.stopPropagation(); deleteChannel(c); };
+  actions.append(editBtn, delBtn);
+
+  card.append(top, info, actions);
+  box.appendChild(card);
+ });
+}
+
+function playChannel(c) {
+ commitWatchTime();
+ const video = document.getElementById("player");
+ currentChannelUrl = c.url;
+ document.getElementById("playingName").textContent = c.name + " • " + (c.group || "Live");
+ document.getElementById("playerBox").style.display = "block";
+
+ if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
+ if (/\.m3u8(\?|$)/i.test(c.url) && window.Hls && Hls.isSupported()) {
+  hlsInstance = new Hls();
+  hlsInstance.loadSource(c.url);
+  hlsInstance.attachMedia(video);
+  hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
+ } else {
+  video.src = c.url;
+  video.play().catch(() => {});
+ }
+
+ recent = [c.url, ...recent.filter(x => x !== c.url)].slice(0, 30);
+ persistProfiles();
+ renderPlayerChannels();
+ render();
+}
+function renderPlayerChannels() {
+ const box = document.getElementById("playerChannelList");
+ box.innerHTML = "";
+ const list = getFilteredChannels();
+ (list.length ? list : channels).forEach((c, i) => {
+  const b = document.createElement("button");
+  b.className = "playerChannel" + (c.url === currentChannelUrl ? " active" : "");
+  b.textContent = (i + 1) + ". " + c.name;
+  b.onclick = () => playChannel(c);
+  box.appendChild(b);
+ });
+}
+function changeChannel(step) {
+ const list = getFilteredChannels().length ? getFilteredChannels() : channels;
+ if (!list.length) return;
+ let idx = list.findIndex(c => c.url === currentChannelUrl);
+ if (idx < 0) idx = 0;
+ playChannel(list[(idx + step + list.length) % list.length]);
+}
+function toggleChannelList() {
+ document.getElementById("playerLayout").classList.toggle("channels-hidden");
+}
+function stopPlayer() {
+ commitWatchTime();
+ if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
+ const p = document.getElementById("player");
+ p.pause(); p.removeAttribute("src"); p.load();
+ currentChannelUrl = "";
+ document.getElementById("playerBox").style.display = "none";
+ render();
+}
+function fullscreenPlayer() {
+ const p = document.getElementById("player");
+ if (p.webkitEnterFullscreen) p.webkitEnterFullscreen();
+ else if (p.requestFullscreen) p.requestFullscreen();
+}
+
+function parseM3uText(text, source = "playlist") {
+ const lines = String(text || "").split(/\r?\n/);
+ const out = [];
+ let name = "", group = "Other", logo = "";
+ for (let raw of lines) {
+  const line = raw.trim();
+  if (!line) continue;
+  if (line.toUpperCase().startsWith("#EXTINF")) {
+   const comma = line.lastIndexOf(",");
+   name = comma >= 0 ? line.substring(comma + 1).trim() || "Unknown Channel" : "Unknown Channel";
+   const gm = line.match(/group-title="([^"]*)"/i);
+   const lm = line.match(/tvg-logo="([^"]*)"/i);
+   group = gm && gm[1].trim() ? gm[1].trim() : "Other";
+   logo = lm ? lm[1].trim() : "";
+  } else if (!line.startsWith("#") && name) {
+   if (isValidHttpUrl(line)) out.push({ name, group, logo, url: line, source });
+   name = ""; group = "Other"; logo = "";
+  }
+ }
+ return out;
+}
+function mergeChannels(incoming) {
+ const map = new Map(channels.map(c => [c.url, c]));
+ incoming.forEach(c => map.set(c.url, c));
+ channels = Array.from(map.values());
+ persistChannels();
+}
+
+function openSettings() {
+ closeMenuMobile();
+ document.getElementById("settingsModal").style.display = "flex";
+ document.getElementById("lanSyncUrl").value = localStorage.getItem("ashika_lan_url") || "";
+ renderPlaylistManager();
+}
+function closeSettings() { document.getElementById("settingsModal").style.display = "none"; }
+
+async function loadPlaylist(urlOverride) {
+ const url = (urlOverride || document.getElementById("playlistUrl").value).trim();
+ const status = document.getElementById("status");
+ if (!isValidHttpUrl(url)) { status.textContent = "Enter a valid HTTP/HTTPS playlist URL."; return; }
+ status.textContent = "Loading playlist...";
+ try {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  const parsed = parseM3uText(await res.text(), "playlist");
+  if (!parsed.length) throw new Error("No channels found in playlist.");
+  mergeChannels(parsed);
+  if (!savedPlaylists.includes(url)) {
+   savedPlaylists.push(url);
+   localStorage.setItem("ashika_playlists", JSON.stringify(savedPlaylists));
+  }
+  status.textContent = parsed.length + " channels loaded!";
+  renderPlaylistManager();
+  renderPlayerChannels();
+  render();
+ } catch (e) {
+  status.textContent = "Could not load playlist: " + e.message;
+ }
+}
+function uploadPlaylistFile(event) {
+ const file = event.target.files && event.target.files[0];
+ if (!file) return;
+ const reader = new FileReader();
+ reader.onload = () => {
+  const parsed = parseM3uText(reader.result, "file");
+  mergeChannels(parsed);
+  render();
+  renderPlayerChannels();
+  document.getElementById("status").textContent = parsed.length + " channel(s) imported from file.";
+  event.target.value = "";
+ };
+ reader.readAsText(file);
+}
+function renderPlaylistManager() {
+ const box = document.getElementById("playlistManager");
+ box.innerHTML = "";
+ if (!savedPlaylists.length) { box.textContent = "No saved playlists."; return; }
+ savedPlaylists.forEach((url, idx) => {
+  const row = document.createElement("div"); row.className = "adminItem";
+  const label = document.createElement("span"); label.textContent = url;
+  const btns = document.createElement("div"); btns.className = "btn-row";
+  const ref = document.createElement("button"); ref.className = "action"; ref.textContent = "Refresh";
+  ref.onclick = () => loadPlaylist(url);
+  const rem = document.createElement("button"); rem.className = "action danger"; rem.textContent = "Remove";
+  rem.onclick = () => {
+   savedPlaylists.splice(idx, 1);
+   localStorage.setItem("ashika_playlists", JSON.stringify(savedPlaylists));
+   renderPlaylistManager();
+  };
+  btns.append(ref, rem); row.append(label, btns); box.appendChild(row);
+ });
+}
+
+function openChannelModal(channel = null) {
+ editingChannelUrl = channel ? channel.url : null;
+ document.getElementById("channelModalTitle").textContent = channel ? "Edit Channel" : "＋ Add Channel";
+ document.getElementById("chName").value = channel ? channel.name : "";
+ document.getElementById("chUrl").value = channel ? channel.url : "";
+ document.getElementById("chCategory").value = channel ? (channel.group || "Other") : "";
+ document.getElementById("chLogo").value = channel ? (channel.logo || "") : "";
+ document.getElementById("channelFormStatus").textContent = "";
+ document.getElementById("channelModal").style.display = "flex";
+}
+function closeChannelModal() { document.getElementById("channelModal").style.display = "none"; }
+function saveChannelForm() {
+ const name = document.getElementById("chName").value.trim();
+ const url = document.getElementById("chUrl").value.trim();
+ const group = document.getElementById("chCategory").value.trim() || "Other";
+ const logo = document.getElementById("chLogo").value.trim();
+ const err = document.getElementById("channelFormStatus");
+ if (!name || !isValidHttpUrl(url)) {
+  err.textContent = "Channel name and valid HTTP/HTTPS stream URL are required.";
+  return;
+ }
+ if (editingChannelUrl && editingChannelUrl !== url) {
+  channels = channels.filter(c => c.url !== editingChannelUrl);
+ }
+ mergeChannels([{ name, url, group, logo, source: "manual" }]);
+ closeChannelModal();
+ renderAdminChannels();
+ renderPlayerChannels();
+ render();
+}
+function deleteChannel(c) {
+ if (!confirm("Delete " + c.name + "?")) return;
+ if (currentChannelUrl === c.url) stopPlayer();
+ channels = channels.filter(x => x.url !== c.url);
+ persistChannels();
+ renderAdminChannels();
+ renderPlayerChannels();
+ render();
+}
+
+async function sha256(str) {
+ if (window.crypto && crypto.subtle) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+ }
+ return btoa(str);
+}
+function openAdmin() {
+ closeMenuMobile();
+ document.getElementById("adminPanel").style.display = "flex";
+ document.getElementById("adminLogin").style.display = "block";
+ document.getElementById("adminDashboard").style.display = "none";
+ document.getElementById("adminPin").value = "";
+ document.getElementById("adminMessage").textContent =
+  localStorage.getItem("ashika_admin_pin_hash") ? "Enter your Admin PIN." : "First use: create a 4+ digit Admin PIN.";
+}
+function closeAdmin() { document.getElementById("adminPanel").style.display = "none"; }
+async function adminLogin() {
+ const pin = document.getElementById("adminPin").value.trim();
+ if (pin.length < 4) { alert("PIN must be at least 4 digits."); return; }
+ const hash = await sha256(pin);
+ const saved = localStorage.getItem("ashika_admin_pin_hash");
+ if (!saved) {
+  localStorage.setItem("ashika_admin_pin_hash", hash);
+ } else if (hash !== saved) {
+  alert("Incorrect PIN."); return;
+ }
+ document.getElementById("adminLogin").style.display = "none";
+ document.getElementById("adminDashboard").style.display = "block";
+ document.getElementById("adminPlaylists").value = savedPlaylists.join("\n");
+ renderAdminChannels();
+}
+function adminLogout() {
+ document.getElementById("adminDashboard").style.display = "none";
+ document.getElementById("adminLogin").style.display = "block";
+}
+function renderAdminChannels() {
+ const box = document.getElementById("adminChannelList");
+ if (!box) return;
+ box.innerHTML = "";
+ channels.forEach(c => {
+  const row = document.createElement("div"); row.className = "adminItem";
+  const lbl = document.createElement("span"); lbl.textContent = c.name + " — " + (c.group || "Other");
+  const btns = document.createElement("div"); btns.className = "btn-row";
+  const ed = document.createElement("button"); ed.className = "action"; ed.textContent = "Edit"; ed.onclick = () => openChannelModal(c);
+  const dl = document.createElement("button"); dl.className = "action danger"; dl.textContent = "Delete"; dl.onclick = () => deleteChannel(c);
+  btns.append(ed, dl); row.append(lbl, btns); box.appendChild(row);
+ });
+}
+async function refreshAdminPlaylists() {
+ const urls = document.getElementById("adminPlaylists").value.split(/\r?\n/).map(x => x.trim()).filter(isValidHttpUrl);
+ savedPlaylists = [...new Set(urls)];
+ localStorage.setItem("ashika_playlists", JSON.stringify(savedPlaylists));
+ const status = document.getElementById("adminStatus");
+ status.textContent = "Refreshing " + savedPlaylists.length + " playlist(s)...";
+ for (const u of savedPlaylists) await loadPlaylist(u);
+ status.textContent = "Finished refreshing playlists.";
+ renderAdminChannels();
+}
+
+function ashikaOpenFeature(id) {
+ document.querySelectorAll(".featurePanel").forEach(p => p.style.display = "none");
+ const panel = document.getElementById(id);
+ if (panel) panel.style.display = "block";
+ if (id === "familyPanel") ashikaRenderProfiles();
+ if (id === "statsPanel") ashikaRenderStats();
+ if (id === "matchPanel") ashikaRenderMatches();
+}
+function ashikaCloseFeatures() {
+ document.querySelectorAll(".featurePanel").forEach(p => p.style.display = "none");
+}
+function ashikaAskFinder() {
+ const q = (document.getElementById("aiQuestion").value || "").trim().toLowerCase();
+ const box = document.getElementById("aiResults");
+ box.innerHTML = "";
+ if (!q) { box.textContent = "Type a channel name, category, 'favorites', or 'recent'."; return; }
+ let found = [];
+ if (q.includes("favorite") || q.includes("favourite")) found = channels.filter(c => favorites.includes(c.url));
+ else if (q.includes("recent")) found = channels.filter(c => recent.includes(c.url));
+ else {
+  const words = q.split(/\s+/).filter(w => w.length > 2);
+  found = channels.filter(c => {
+   const text = ((c.name || "") + " " + (c.group || "")).toLowerCase();
+   return text.includes(q) || words.some(w => text.includes(w));
+  });
+ }
+ if (!found.length) { box.textContent = "No matching channels found."; return; }
+ found.slice(0, 15).forEach(c => {
+  const row = document.createElement("div"); row.className = "adminItem";
+  const lbl = document.createElement("span"); lbl.textContent = c.name + " (" + (c.group || "Other") + ")";
+  const playBtn = document.createElement("button"); playBtn.className = "action primary"; playBtn.textContent = "Play";
+  playBtn.onclick = () => playChannel(c);
+  row.append(lbl, playBtn); box.appendChild(row);
+ });
+}
+function ashikaCreatePair() {
+ const code = String(Math.floor(100000 + Math.random() * 900000));
+ document.getElementById("pairCode").textContent = "Pairing Code: " + code;
+ const img = document.getElementById("qrImage");
+ img.src = "https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=" + encodeURIComponent("ashika://pair?code=" + code);
+ img.style.display = "block";
+ img.onerror = () => { img.style.display = "none"; };
+}
+function ashikaRenderMatches() {
+ const list = JSON.parse(localStorage.getItem("ashika_matches") || "[]");
+ const box = document.getElementById("matchList");
+ box.innerHTML = "";
+ if (!list.length) { box.textContent = "No match information added."; return; }
+ list.forEach((m, i) => {
+  const row = document.createElement("div"); row.className = "adminItem";
+  const lbl = document.createElement("span"); lbl.textContent = m.teams + " | " + m.score + " | " + m.time;
+  const del = document.createElement("button"); del.className = "action danger"; del.textContent = "Delete";
+  del.onclick = () => { list.splice(i, 1); localStorage.setItem("ashika_matches", JSON.stringify(list)); ashikaRenderMatches(); };
+  row.append(lbl, del); box.appendChild(row);
+ });
+}
+function ashikaAddMatch() {
+ const teams = document.getElementById("matchTeams").value.trim();
+ const time = document.getElementById("matchTime").value.trim() || "Scheduled";
+ const score = document.getElementById("matchScore").value.trim() || "0 - 0";
+ if (!teams) { alert("Enter team names first."); return; }
+ const list = JSON.parse(localStorage.getItem("ashika_matches") || "[]");
+ list.unshift({ teams, time, score });
+ localStorage.setItem("ashika_matches", JSON.stringify(list.slice(0, 30)));
+ ["matchTeams", "matchTime", "matchScore"].forEach(id => document.getElementById(id).value = "");
+ ashikaRenderMatches();
+}
+function ashikaRenderProfiles() {
+ const sel = document.getElementById("familySelect");
+ sel.innerHTML = "";
+ profiles.forEach(p => {
+  const opt = document.createElement("option");
+  opt.value = p.name; opt.textContent = p.name;
+  sel.appendChild(opt);
+ });
+ sel.value = activeProfile;
+ document.getElementById("profileInfo").textContent =
+  "Active: " + activeProfile + " | Favorites: " + favorites.length + " | Recent: " + recent.length;
+}
+function ashikaSwitchProfile(name) {
+ persistProfiles();
+ activeProfile = name;
+ loadProfileArrays();
+ persistProfiles();
+ ashikaRenderProfiles();
+ render();
+}
+function ashikaAddProfile() {
+ const input = document.getElementById("newProfileName");
+ const name = input.value.trim();
+ if (!name) return;
+ if (profiles.some(p => p.name.toLowerCase() === name.toLowerCase())) { alert("Profile already exists."); return; }
+ persistProfiles();
+ profiles.push({ name, favorites: [], recent: [] });
+ input.value = "";
+ ashikaSwitchProfile(name);
+}
+
+const videoEl = document.getElementById("player");
+function commitWatchTime() {
+ if (!watchTimerStart || !currentChannelUrl) return;
+ const delta = Math.floor((Date.now() - watchTimerStart) / 1000);
+ watchTimerStart = 0;
+ if (delta <= 0 || delta > 300) return;
+ const stats = JSON.parse(localStorage.getItem("ashika_watch_stats") || "{}");
+ const ch = channels.find(c => c.url === currentChannelUrl);
+ const key = ch ? ch.name : currentChannelUrl;
+ stats[key] = (stats[key] || 0) + delta;
+ localStorage.setItem("ashika_watch_stats", JSON.stringify(stats));
+}
+videoEl.addEventListener("play", () => { watchTimerStart = Date.now(); });
+videoEl.addEventListener("pause", commitWatchTime);
+videoEl.addEventListener("timeupdate", () => {
+ if (!videoEl.paused && watchTimerStart && (Date.now() - watchTimerStart) >= 10000) {
+  commitWatchTime();
+  watchTimerStart = Date.now();
+ }
+});
+function ashikaRenderStats() {
+ const stats = JSON.parse(localStorage.getItem("ashika_watch_stats") || "{}");
+ const entries = Object.entries(stats).sort((a, b) => b[1] - a[1]);
+ const total = entries.reduce((s, x) => s + x[1], 0);
+ const fmt = s => Math.floor(s / 60) + "m " + Math.floor(s % 60) + "s";
+ document.getElementById("watchStats").textContent =
+  "Total watch time: " + fmt(total) + "\n" +
+  (entries.length ? entries.slice(0, 15).map((x, i) => (i + 1) + ". " + x[0] + " — " + fmt(x[1])).join("\n") : "No watch time recorded yet.");
+}
+function ashikaResetStats() {
+ localStorage.removeItem("ashika_watch_stats");
+ ashikaRenderStats();
+}
+function ashikaCheckHealth() {
+ const out = document.getElementById("healthResult");
+ if (!currentChannelUrl) { out.textContent = "Play a channel first."; return; }
+ const netStates = ["NETWORK_EMPTY", "NETWORK_IDLE", "NETWORK_LOADING", "NETWORK_NO_SOURCE"];
+ const res = videoEl.videoWidth ? videoEl.videoWidth + "x" + videoEl.videoHeight : "Audio / Pending";
+ let text = "Channel: " + document.getElementById("playingName").textContent +
+  "\nNetwork State: " + (netStates[videoEl.networkState] || "Unknown") +
+  "\nReady State: " + videoEl.readyState +
+  "\nResolution: " + res;
+ if (videoEl.error) text += "\nPlayer Error Code: " + videoEl.error.code;
+ else if (videoEl.readyState >= 3) text += "\nStatus: Healthy & streaming";
+ else text += "\nStatus: Buffering or awaiting stream data";
+ out.textContent = text;
+}
+async function ashikaSyncPhonePlaylist() {
+ const url = (document.getElementById("lanSyncUrl").value || "").trim();
+ const status = document.getElementById("status");
+ if (!isValidHttpUrl(url)) { status.textContent = "Enter a valid companion sync URL."; return; }
+ localStorage.setItem("ashika_lan_url", url);
+ try {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  const data = await res.json();
+  const incoming = (data.channels || []).filter(c => c && c.name && isValidHttpUrl(c.url))
+   .map(c => ({ name: c.name, group: c.group || "Other", logo: c.logo || "", url: c.url, source: "phone" }));
+  mergeChannels(incoming);
+  render(); renderPlayerChannels();
+  status.textContent = "Companion sync imported " + incoming.length + " channels.";
+ } catch (e) {
+  status.textContent = "Companion sync unavailable: " + e.message;
+ }
+}
+function openToffee() { window.open("https://toffeelive.com", "_blank", "noopener"); }
+function showAbout() { alert("Ashika Live TV v1.0.0\nFree and authorized M3U / HLS streams only."); }
+function dismissSplash() {
+ const s = document.getElementById("ashikaSplash");
+ if (s) { s.style.opacity = "0"; setTimeout(() => s.remove(), 400); }
+}
+
+document.addEventListener("keydown", e => {
+ const key = e.key || "";
+ if (key === "Escape" || key === "Back" || e.keyCode === 461) {
+  const openModal = [...document.querySelectorAll(".modal")].find(m => getComputedStyle(m).display !== "none");
+  if (openModal) openModal.style.display = "none";
+  else if (document.getElementById("playerBox").style.display !== "none") stopPlayer();
+  else closeMenuMobile();
+  e.preventDefault();
+  return;
+ }
+ // TV remote navigation: keep focus visible and move between actionable controls.
+ if (["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(key)) {
+  const items = [...document.querySelectorAll('button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), .channel')]
+   .filter(el => el.getClientRects().length && getComputedStyle(el).visibility !== "hidden");
+  if (!items.length) return;
+  const current = items.indexOf(document.activeElement);
+  const delta = key === "ArrowUp" || key === "ArrowLeft" ? -1 : 1;
+  items[(current < 0 ? 0 : (current + delta + items.length) % items.length)].focus();
+  e.preventDefault();
+ }
+});
+
+loadProfileArrays();
+render();
+if (!localStorage.getItem("ashika_seeded")) {
+ localStorage.setItem("ashika_seeded", "1");
+ if (!savedPlaylists.includes(DEFAULT_PLAYLIST)) {
+  savedPlaylists.push(DEFAULT_PLAYLIST);
+  localStorage.setItem("ashika_playlists", JSON.stringify(savedPlaylists));
+ }
+ loadPlaylist(DEFAULT_PLAYLIST);
+}
+window.addEventListener("load", () => setTimeout(dismissSplash, 1100));
+window.addEventListener("beforeunload", () => { commitWatchTime(); persistProfiles(); });
+</script>
+</body>
+</html>
