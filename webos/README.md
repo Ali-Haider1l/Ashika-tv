@@ -28,4 +28,4 @@ GitHub Actions installs the official `@webos-tools/cli`, validates the feature m
 
 ## Install
 
-Download `com.ashika.livetv_9.4.0_all.ipk` from the [webOS v9.4.0 release](https://github.com/Ali-Haider1l/Ashika-tv/releases/tag/webos-v9.4.0). Install using LG webOS Developer Mode and `ares-install`.
+Download `com.ashika.livetv_9.5.2_all.ipk` from the [webOS v9.4.0 release](https://github.com/Ali-Haider1l/Ashika-tv/releases/tag/webos-v9.5.2). Install using LG webOS Developer Mode and `ares-install`.
