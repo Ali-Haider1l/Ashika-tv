@@ -64,14 +64,20 @@ class AshikaRepository(
     suspend fun ensureInitialized(): Result<Int>? {
         dao.insertProfile(FamilyProfileEntity(PreferencesManager.DEFAULT_PROFILE))
 
-        // Seed Kolkata TV as a built-in HLS channel without overwriting user edits/favorites.
-        val kolkataTvUrl = "https://d35j504z0x2vu2.cloudfront.net/v1/master/0bc8e8376bd8417a1b6761138aa41c26c7309312/kolkata-tv/index.m3u8"
-        if (dao.getChannelsSnapshot().none { it.url.equals(kolkataTvUrl, ignoreCase = true) }) {
+        // Seed built-in Indian channels without overwriting existing user channels.
+        val builtInIndianChannels = listOf(
+            Triple("Kolkata TV", "India News", "https://d35j504z0x2vu2.cloudfront.net/v1/master/0bc8e8376bd8417a1b6761138aa41c26c7309312/kolkata-tv/index.m3u8"),
+            Triple("Zee Bangla HD", "India Entertainment", "https://d1rc86nwwc9fag.cloudfront.net/260723/smil:zeebangla.smil/chunklist_b2628000.m3u8"),
+            Triple("Zee Bangla HD (IPTV)", "India Entertainment", "http://103.161.153.165:8000/play/zeebnhd/index.m3u8"),
+            Triple("Zee Bangla (Playyono)", "India Entertainment", "https://playyonogames.in/z5/stream.m3u8?id=0-9-zeebangla")
+        )
+        val existingChannelUrls = dao.getChannelsSnapshot().map { it.url.lowercase() }.toSet()
+        builtInIndianChannels.filterNot { it.third.lowercase() in existingChannelUrls }.forEach { (name, group, url) ->
             dao.upsertChannel(
                 ChannelEntity(
-                    url = kolkataTvUrl,
-                    name = "Kolkata TV",
-                    groupTitle = "India News",
+                    url = url,
+                    name = name,
+                    groupTitle = group,
                     source = "built-in"
                 )
             )
