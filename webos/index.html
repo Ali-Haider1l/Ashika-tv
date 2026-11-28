@@ -623,7 +623,7 @@ function ashikaSetHero(index){
  document.getElementById("heroPlay").textContent=ashikaHeroChannel?"▶ Watch "+ashikaHeroChannel.name:"＋ Add Playlist";
  hero.querySelectorAll(".hero-dots button").forEach((b,i)=>b.classList.toggle("active",i===ashikaHeroIndex));
 }
-function ashikaPlayHero(){if(ashikaHeroChannel)playChannel(ashikaHeroChannel);else openSettings();}
+function ashikaPlayHero(){if(!ashikaHeroChannel){openSettings();return;}page="all";category="All";const search=document.getElementById("search");if(search)search.value="";const heading=document.getElementById("heading");if(heading)heading.textContent="All Channels";render();playChannel(ashikaHeroChannel);}
 function ashikaBuildShelf(title,list,kind){
  if(!list.length)return null;
  const section=document.createElement("section");section.className="home-shelf"+(kind==="favorites"?" home-favorites":"");
