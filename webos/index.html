@@ -342,6 +342,7 @@ body.ashika-mini-pip #playerBox{position:fixed!important;right:14px;bottom:14px;
 
 <script>
 const DEFAULT_PLAYLIST = "https://github.com/abusaeeidx/Mrgify-BDIX-IPTV/raw/main/playlist.m3u";
+const DEFAULT_RELAY_ENDPOINT = "https://ashika-tv-relay.vercel.app/api/relay";
 const KOLKATA_TV = { name: "Kolkata TV", group: "India News", logo: "", url: "https://d35j504z0x2vu2.cloudfront.net/v1/master/0bc8e8376bd8417a1b6761138aa41c26c7309312/kolkata-tv/index.m3u8", source: "built-in" };
 let channels = JSON.parse(localStorage.getItem("ashika_channels") || "[]");
 if (!channels.some(c => c.url === KOLKATA_TV.url)) {
@@ -496,11 +497,11 @@ function render() {
 }
 
 function ashikaGetRelayConfig(){
- return {endpoint:(localStorage.getItem("ashika_relay_endpoint")||"").trim().replace(/\/$/,""),key:localStorage.getItem("ashika_relay_key")||""};
+ return {endpoint:(localStorage.getItem("ashika_relay_endpoint")||DEFAULT_RELAY_ENDPOINT).trim().replace(/\/$/,""),key:localStorage.getItem("ashika_relay_key")||""};
 }
 function ashikaSaveRelaySettings(){
- const endpoint=document.getElementById("relayEndpoint").value.trim().replace(/\/$/,""),key=document.getElementById("relayKey").value.trim(),status=document.getElementById("relayStatus");
- if(!endpoint||!/^https:\/\//i.test(endpoint)||!endpoint.endsWith("/api/relay")||!key){status.textContent="Enter an HTTPS Vercel endpoint ending in /api/relay and its relay key.";return;}
+ const endpoint=(document.getElementById("relayEndpoint").value.trim()||DEFAULT_RELAY_ENDPOINT).replace(/\/$/,""),key=document.getElementById("relayKey").value.trim(),status=document.getElementById("relayStatus");
+ if(!/^https:\/\//i.test(endpoint)||!endpoint.endsWith("/api/relay")||!key){status.textContent="Enter the HTTPS relay endpoint ending in /api/relay and its relay key.";return;}
  localStorage.setItem("ashika_relay_endpoint",endpoint);localStorage.setItem("ashika_relay_key",key);
  status.textContent="Relay settings saved. New channel playbacks will use the relay.";
 }
@@ -671,6 +672,9 @@ function openSettings() {
  closeMenuMobile();
  document.getElementById("settingsModal").style.display = "flex";
  document.getElementById("lanSyncUrl").value = localStorage.getItem("ashika_lan_url") || "";
+ const relay=ashikaGetRelayConfig();
+ document.getElementById("relayEndpoint").value=relay.endpoint;
+ document.getElementById("relayKey").value=relay.key;
  renderPlaylistManager();
 }
 function closeSettings() { document.getElementById("settingsModal").style.display = "none"; }
