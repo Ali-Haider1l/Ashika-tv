@@ -1045,7 +1045,7 @@ function ashikaParseXmltv(xml){
  const programs=[];doc.querySelectorAll("programme").forEach(p=>{const start=ashikaXmltvDate(p.getAttribute("start")),stop=ashikaXmltvDate(p.getAttribute("stop")),channel=p.getAttribute("channel")||"",title=p.querySelector("title")?.textContent?.trim()||"Programme",desc=p.querySelector("desc")?.textContent?.trim()||"";if(start&&stop&&channel)programs.push({channel,channelName:names[channel]||channel,title,desc,start,stop});});return {channels:names,programs};
 }
 function ashikaXmltvDate(raw){if(!raw)return 0;const m=raw.match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})?\s*([+-]\d{4}|Z)?/);if(!m)return 0;const iso=m[1]+"-"+m[2]+"-"+m[3]+"T"+m[4]+":"+m[5]+":"+(m[6]||"00")+(m[7]&&m[7]!=="Z"?m[7].slice(0,3)+":"+m[7].slice(3):"Z");const n=Date.parse(iso);return Number.isFinite(n)?n:0;}
-async async async function ashikaReadEpgText(res,url){
+async function ashikaReadEpgText(res,url){
  const compressed=/\.gz(?:$|\?)/i.test(url)||/gzip/i.test(res.headers.get("content-encoding")||"")||/gzip/i.test(res.headers.get("content-type")||"");
  if(!compressed)return await res.text();
  if(typeof DecompressionStream==="undefined")throw new Error("This LG webOS browser cannot decompress .gz EPG. Import an uncompressed .xml file instead.");
