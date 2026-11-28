@@ -76,6 +76,7 @@ module.exports = async function handler(req, res) {
   const expected = process.env.RELAY_API_KEY || "";
   const supplied = String(req.query.key || "");
   if (!expected || supplied.length !== expected.length || supplied !== expected) return json(res, 401, { error: "Relay key missing or invalid" });
+  if (req.query.health === "1") return json(res, 200, { ok: true, service: "Ashika TV Relay", version: "1.0.0" });
   try {
     let target = await validateTarget(String(req.query.url || ""));
     const headers = decodeHeaders(String(req.query.h || ""));
