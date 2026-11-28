@@ -1110,7 +1110,8 @@ function ashikaCreatePair() {
  img.onerror = () => { img.style.display = "none"; };
 }
 function ashikaRenderMatches() {
- const list = JSON.parse(localStorage.getItem("ashika_matches") || "[]");
+ const stored = ashikaReadJson("ashika_matches", []);
+ const list = Array.isArray(stored) ? stored : [];
  const box = document.getElementById("matchList");
  box.innerHTML = "";
  if (!list.length) { box.textContent = "No match information added."; return; }
@@ -1127,14 +1128,15 @@ function ashikaAddMatch() {
  const time = document.getElementById("matchTime").value.trim() || "Scheduled";
  const score = document.getElementById("matchScore").value.trim() || "0 - 0";
  if (!teams) { alert("Enter team names first."); return; }
- const list = JSON.parse(localStorage.getItem("ashika_matches") || "[]");
+ const stored = ashikaReadJson("ashika_matches", []);
+ const list = Array.isArray(stored) ? stored : [];
  list.unshift({ teams, time, score });
  localStorage.setItem("ashika_matches", JSON.stringify(list.slice(0, 30)));
  ["matchTeams", "matchTime", "matchScore"].forEach(id => document.getElementById(id).value = "");
  ashikaRenderMatches();
 }
 
-let ashikaLanguage = localStorage.getItem("ashika_language") === "bn" ? "bn" : "en";
+let ashikaLanguage = ashikaReadString("ashika_language", "en") === "bn" ? "bn" : "en";
 function openLanguagePicker(){document.getElementById("languageModal").style.display="flex";}
 function setAppLanguage(language){
  ashikaLanguage=language==="bn"?"bn":"en";localStorage.setItem("ashika_language",ashikaLanguage);document.documentElement.lang=ashikaLanguage;
@@ -1213,7 +1215,8 @@ function commitWatchTime() {
  const delta = Math.floor((Date.now() - watchTimerStart) / 1000);
  watchTimerStart = 0;
  if (delta <= 0 || delta > 300) return;
- const stats = JSON.parse(localStorage.getItem("ashika_watch_stats") || "{}");
+ const storedStats = ashikaReadJson("ashika_watch_stats", {});
+ const stats = storedStats && typeof storedStats === "object" && !Array.isArray(storedStats) ? storedStats : {};
  const ch = channels.find(c => c.url === currentChannelUrl);
  const key = ch ? ch.name : currentChannelUrl;
  stats[key] = (stats[key] || 0) + delta;
@@ -1228,7 +1231,8 @@ videoEl.addEventListener("timeupdate", () => {
  }
 });
 function ashikaRenderStats() {
- const stats = JSON.parse(localStorage.getItem("ashika_watch_stats") || "{}");
+ const storedStats = ashikaReadJson("ashika_watch_stats", {});
+ const stats = storedStats && typeof storedStats === "object" && !Array.isArray(storedStats) ? storedStats : {};
  const entries = Object.entries(stats).sort((a, b) => b[1] - a[1]);
  const total = entries.reduce((s, x) => s + x[1], 0);
  const fmt = s => Math.floor(s / 60) + "m " + Math.floor(s % 60) + "s";
@@ -1291,7 +1295,7 @@ function ashikaToggleMiniPip(){
 }
 function ashikaExportBackup(){
  commitWatchTime();
- const data={format:"ashika-tv-backup",version:1,createdAt:new Date().toISOString(),channels,savedPlaylists,favorites,recent,profiles,activeProfile,watchStats:JSON.parse(localStorage.getItem("ashika_watch_stats")||"{}"),matches:JSON.parse(localStorage.getItem("ashika_matches")||"[]"),epgData,epgChannelNames,epgUrl:localStorage.getItem("ashika_epg_url")||""};
+ const data={format:"ashika-tv-backup",version:1,createdAt:new Date().toISOString(),channels,savedPlaylists,favorites,recent,profiles,activeProfile,watchStats:ashikaReadJson("ashika_watch_stats",{}),matches:ashikaReadJson("ashika_matches",[]),epgData,epgChannelNames,epgUrl:localStorage.getItem("ashika_epg_url")||""};
  const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"}),url=URL.createObjectURL(blob),a=document.createElement("a");
  a.href=url;a.download="ashika-tv-backup-"+new Date().toISOString().slice(0,10)+".json";document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);
  document.getElementById("backupStatus").textContent="Backup exported. Keep the JSON file safe and import it on another Ashika TV device.";
@@ -1301,8 +1305,8 @@ function ashikaImportBackup(event){
  const reader=new FileReader();reader.onload=()=>{
   try{
    const d=JSON.parse(String(reader.result));if(d.format!=="ashika-tv-backup"||!Array.isArray(d.channels))throw new Error("Not a valid Ashika TV backup.");
-   channels=d.channels.filter(c=>c&&c.name&&isValidHttpUrl(c.url));savedPlaylists=Array.isArray(d.savedPlaylists)?d.savedPlaylists.filter(isValidHttpUrl):[];
-   profiles=Array.isArray(d.profiles)&&d.profiles.length?d.profiles:[{name:"Default",favorites:[],recent:[]}];
+   const restoreMap=new Map([...DEFAULT_CHANNELS,KOLKATA_TV].map(c=>[c.url,c]));d.channels.filter(c=>c&&typeof c.name==="string"&&c.name.trim()&&isValidHttpUrl(c.url)).forEach(c=>restoreMap.set(c.url,c));channels=Array.from(restoreMap.values());savedPlaylists=Array.isArray(d.savedPlaylists)?d.savedPlaylists.filter(isValidHttpUrl):[];
+   profiles=Array.isArray(d.profiles)?d.profiles.filter(p=>p&&typeof p.name==="string"&&p.name.trim()).map(p=>({name:p.name,favorites:Array.isArray(p.favorites)?p.favorites.filter(x=>typeof x==="string"):[],recent:Array.isArray(p.recent)?p.recent.filter(x=>typeof x==="string"):[]})):[ ];if(!profiles.length)profiles=[{name:"Default",favorites:[],recent:[]}];
    activeProfile=profiles.some(p=>p.name===d.activeProfile)?d.activeProfile:profiles[0].name;
    favorites=Array.isArray(d.favorites)?d.favorites:[];recent=Array.isArray(d.recent)?d.recent:[];
    persistChannels();persistProfiles();localStorage.setItem("ashika_playlists",JSON.stringify(savedPlaylists));
@@ -1460,9 +1464,9 @@ document.addEventListener("keydown", e => {
 page="all"; category="All";
 loadProfileArrays();
 ashikaSetHero(0);
-if(localStorage.getItem("ashika_epg_url"))document.getElementById("epgUrl").value=localStorage.getItem("ashika_epg_url");
+if(ashikaReadString("ashika_epg_url",""))document.getElementById("epgUrl").value=ashikaReadString("ashika_epg_url","");
 render();ashikaRenderEpg();
-if (!localStorage.getItem("ashika_seeded")) {
+if (!ashikaReadString("ashika_seeded", "")) {
  localStorage.setItem("ashika_seeded", "1");
  if (!savedPlaylists.includes(DEFAULT_PLAYLIST)) {
   savedPlaylists.push(DEFAULT_PLAYLIST);
