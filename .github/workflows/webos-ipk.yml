@@ -88,6 +88,15 @@ jobs:
           for fn in ("ashikaLoadEpg", "ashikaParseXmltv", "ashikaSelectSubtitle", "ashikaSelectAudio", "ashikaToggleMiniPip", "ashikaExportBackup", "ashikaImportBackup", "ashikaExtractToffeeInput", "ashikaFetchToffee", "ashikaParseJsonPlaylist", "ashikaParseHeaderQuery"):
               assert ("function " + fn + "(") in webos, f"Missing feature function: {fn}"
           assert "video.canPlayType" in webos and "xhr.setRequestHeader" in webos, "Native HLS / header-aware HLS playback is missing"
+          for feature in ("relayEndpoint", "relayKey", "relayStatus"):
+              assert feature in webos, f"Missing relay UI: {feature}"
+          for fn in ("ashikaSaveRelaySettings", "ashikaTestRelay", "ashikaBuildRelayUrl"):
+              assert ("function " + fn + "(") in webos, f"Missing relay integration: {fn}"
+          assert "playbackUrl" in webos and "Buffered Ahead" in webos, "Relay playback / expanded diagnostics are missing"
+          subprocess.run(["node", "--check", "relay/api/relay.js"], check=True)
+          json.loads(pathlib.Path("relay/package.json").read_text())
+          json.loads(pathlib.Path("relay/vercel.json").read_text())
+          print("Secure relay source syntax and project configuration validated")
           # Parse every inline JavaScript block to catch syntax errors before packaging.
           import subprocess, tempfile
           scripts = re.findall(r"<script\b(?![^>]*\bsrc=)[^>]*>([\s\S]*?)</script>", webos, re.I)
