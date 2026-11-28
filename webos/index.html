@@ -1293,8 +1293,8 @@ function ashikaSelectSubtitle(value){if(value.startsWith("hls:")&&hlsInstance){h
 function ashikaSelectAudio(value){if(value.startsWith("hls:")&&hlsInstance){hlsInstance.audioTrack=Number(value.slice(4));return;}const n=Number(value.replace("native:","")),tracks=videoEl.audioTracks;if(!tracks)return;for(let i=0;i<tracks.length;i++)tracks[i].enabled=n<0||n===i;}
 function ashikaParseXmltv(xml){
  const doc=new DOMParser().parseFromString(xml,"application/xml");if(doc.querySelector("parsererror"))throw new Error("Invalid XMLTV document.");
- const names={};doc.querySelectorAll("channel").forEach(ch=>{const id=ch.getAttribute("id")||"",nm=ch.querySelector("display-name")?.textContent?.trim()||id;if(id)names[id]=nm;});
- const programs=[];doc.querySelectorAll("programme").forEach(p=>{const start=ashikaXmltvDate(p.getAttribute("start")),stop=ashikaXmltvDate(p.getAttribute("stop")),channel=p.getAttribute("channel")||"",title=p.querySelector("title")?.textContent?.trim()||"Programme",desc=p.querySelector("desc")?.textContent?.trim()||"";if(start&&stop&&channel)programs.push({channel,channelName:names[channel]||channel,title,desc,start,stop});});return {channels:names,programs};
+ const names={};doc.querySelectorAll("channel").forEach(ch=>{const id=ch.getAttribute("id")||"",nm=(ch.querySelector("display-name") ? (ch.querySelector("display-name").textContent ? ch.querySelector("display-name").textContent.trim() : "") : "")||id;if(id)names[id]=nm;});
+ const programs=[];doc.querySelectorAll("programme").forEach(p=>{const start=ashikaXmltvDate(p.getAttribute("start")),stop=ashikaXmltvDate(p.getAttribute("stop")),channel=p.getAttribute("channel")||"",title=(p.querySelector("title") ? (p.querySelector("title").textContent ? p.querySelector("title").textContent.trim() : "") : "")||"Programme",desc=(p.querySelector("desc") ? (p.querySelector("desc").textContent ? p.querySelector("desc").textContent.trim() : "") : "");if(start&&stop&&channel)programs.push({channel,channelName:names[channel]||channel,title,desc,start,stop});});return {channels:names,programs};
 }
 function ashikaXmltvDate(raw){if(!raw)return 0;const m=raw.match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})?\s*([+-]\d{4}|Z)?/);if(!m)return 0;const iso=m[1]+"-"+m[2]+"-"+m[3]+"T"+m[4]+":"+m[5]+":"+(m[6]||"00")+(m[7]&&m[7]!=="Z"?m[7].slice(0,3)+":"+m[7].slice(3):"Z");const n=Date.parse(iso);return Number.isFinite(n)?n:0;}
 async function ashikaReadEpgText(res,url){
@@ -1316,7 +1316,7 @@ function ashikaRenderEpg(){
 function ashikaClearEpg(){epgData=[];epgChannelNames={};localStorage.removeItem("ashika_epg_data");localStorage.removeItem("ashika_epg_channels");ashikaRenderEpg();}
 
 function openToffee() { window.open("https://toffeelive.com", "_blank", "noopener"); }
-function showAbout() { alert("Ashika Live TV v9.4.3\nFree and authorized M3U / HLS streams only."); }
+function showAbout() { alert("Ashika Live TV v9.4.4\nFree and authorized M3U / HLS streams only."); }
 function dismissSplash() {
  const s = document.getElementById("ashikaSplash");
  if (s) { s.style.opacity = "0"; setTimeout(() => s.remove(), 400); }
@@ -1402,7 +1402,7 @@ window.addEventListener("error", event => {
  const box = document.getElementById("channels");
  if (box && !channels.length) box.textContent = "App startup error: " + (event.message || "Unknown error");
 });
-window.addEventListener("load", () => { setAppLanguage(ashikaLanguage); setTimeout(dismissSplash, 500); });
+window.addEventListener("load", () => { setAppLanguage(ashikaLanguage); setTimeout(dismissSplash, 500); setTimeout(async () => { const startupUrls = [...new Set([DEFAULT_PLAYLIST, ...savedPlaylists])]; for (const playlistUrl of startupUrls) { await loadPlaylist(playlistUrl); } }, 300); });
 window.addEventListener("beforeunload", () => { commitWatchTime(); persistProfiles(); });
 </script>
 </body>
