@@ -61,6 +61,18 @@ jobs:
           for key in ("main", "icon", "largeIcon"):
               assert (root / info[key]).is_file(), f"Missing {key}: {info[key]}"
           assert (root / "index.html").is_file()
+
+          # Keep every screen/control and JavaScript function from the canonical app.
+          import re
+          canonical = pathlib.Path("ashika_live_tv.html").read_text()
+          webos = (root / "index.html").read_text()
+          ids = lambda source: set(re.findall(r"""\\bid=["']([^"']+)["']""", source))
+          funcs = lambda source: set(re.findall(r"function\\s+([A-Za-z_$][\\w$]*)\\s*\\(", source))
+          missing_ids = ids(canonical) - ids(webos)
+          missing_funcs = funcs(canonical) - funcs(webos)
+          assert not missing_ids, f"Missing UI elements: {sorted(missing_ids)}"
+          assert not missing_funcs, f"Missing app functions: {sorted(missing_funcs)}"
+          print(f"Parity check passed: {len(ids(canonical))} UI IDs, {len(funcs(canonical))} functions")
           print("Validated:", info["id"], info["version"])
           PY
 
@@ -69,21 +81,39 @@ jobs:
           mkdir -p dist
           ares-config --profile tv
           ares-package --no-minify --outdir dist webos
-          test -s dist/com.ashika.livetv_1.0.0_all.ipk
-          ares-package --info dist/com.ashika.livetv_1.0.0_all.ipk
+          test -s dist/com.ashika.livetv_1.0.1_all.ipk
+          ares-package --info dist/com.ashika.livetv_1.0.1_all.ipk
+
+      - name: Verify packaged IPK contents
+        run: |
+          python - <<'PY'
+          import io, pathlib, subprocess, tarfile
+          package = pathlib.Path("dist/com.ashika.livetv_1.0.1_all.ipk")
+          members = subprocess.check_output(["ar", "t", str(package)], text=True).splitlines()
+          data_name = next((name for name in members if name.startswith("data.tar")), None)
+          assert data_name, f"No application payload found in IPK: {members}"
+          payload = subprocess.check_output(["ar", "p", str(package), data_name])
+          with tarfile.open(fileobj=io.BytesIO(payload), mode="r:*") as archive:
+              files = {pathlib.PurePosixPath(item.name).name: item for item in archive.getmembers() if item.isfile()}
+              for required in ("index.html", "appinfo.json", "icon.png"):
+                  assert required in files, f"Missing {required} inside IPK"
+              assert files["index.html"].size >= 40000, "Packaged app HTML is unexpectedly incomplete"
+              print("IPK payload verified:", {name: files[name].size for name in ("index.html", "appinfo.json", "icon.png")})
+          print("Final IPK bytes:", package.stat().st_size)
+          PY
 
       - name: Upload IPK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Ashika-TV-webOS-IPK-v1.0.0
+          name: Ashika-TV-webOS-IPK-v1.0.1
           path: dist/*.ipk
           retention-days: 90
 
       - name: Publish webOS IPK release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: webos-v1.0.0
+          tag_name: webos-v1.0.1
           target_commitish: main
-          name: Ashika TV webOS v1.0.0
+          name: Ashika TV webOS v1.0.1
           generate_release_notes: true
           files: dist/*.ipk
