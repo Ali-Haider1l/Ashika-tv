@@ -309,6 +309,10 @@ body.ashika-mini-pip #playerBox{position:fixed!important;right:14px;bottom:14px;
    <button class="action primary" onclick="loadPlaylist()">Load Playlist</button>
    <button class="action" onclick="closeSettings()">Close</button>
   </div>
+  <h4 style="margin:14px 0 6px">＋ Add &amp; Save More Playlists</h4>
+  <p style="font-size:12px;color:var(--muted)">Add any public M3U/M3U8 playlist URL. It will be saved on this TV and can be refreshed later.</p>
+  <input class="field" id="newPlaylistUrl" placeholder="https://example.com/another-playlist.m3u">
+  <div class="btn-row"><button class="action primary" onclick="ashikaAddPlaylist()">＋ Save &amp; Load Playlist</button><button class="action" onclick="document.getElementById('newPlaylistUrl').value=''">Clear</button></div>
   <p id="status" style="font-size:13px;color:var(--primary)"></p>
 
   <div class="adminItem" style="margin-top:12px">
@@ -483,8 +487,45 @@ function persistProfiles() {
  localStorage.setItem("ashika_profiles", JSON.stringify(profiles));
  localStorage.setItem("ashika_active_profile", activeProfile);
 }
+let ashikaDbPromise = null;
+function ashikaOpenDb() {
+ if (ashikaDbPromise) return ashikaDbPromise;
+ ashikaDbPromise = new Promise(resolve => {
+  if (!window.indexedDB) { resolve(null); return; }
+  try {
+   const request = indexedDB.open("AshikaLiveTV", 1);
+   request.onupgradeneeded = () => { const db=request.result; if(!db.objectStoreNames.contains("appdata"))db.createObjectStore("appdata",{keyPath:"key"}); };
+   request.onsuccess = () => resolve(request.result);
+   request.onerror = () => resolve(null);
+  } catch (_) { resolve(null); }
+ });
+ return ashikaDbPromise;
+}
+async function ashikaStoreLargeData(key,value) {
+ const db=await ashikaOpenDb(); if(!db)return false;
+ return new Promise(resolve=>{
+  try { const tx=db.transaction("appdata","readwrite");tx.objectStore("appdata").put({key,value});tx.oncomplete=()=>resolve(true);tx.onerror=()=>resolve(false); }
+  catch(_){resolve(false);}
+ });
+}
+async function ashikaReadLargeData(key) {
+ const db=await ashikaOpenDb();if(!db)return null;
+ return new Promise(resolve=>{
+  try { const req=db.transaction("appdata","readonly").objectStore("appdata").get(key);req.onsuccess=()=>resolve(req.result?req.result.value:null);req.onerror=()=>resolve(null); }
+  catch(_){resolve(null);}
+ });
+}
 function persistChannels() {
- localStorage.setItem("ashika_channels", JSON.stringify(channels));
+ const snapshot=channels.slice();
+ try { localStorage.setItem("ashika_channels", JSON.stringify(snapshot)); } catch (_) {}
+ ashikaStoreLargeData("channels",snapshot);
+}
+async function ashikaRestoreInternalChannels() {
+ const stored=await ashikaReadLargeData("channels");
+ if(!Array.isArray(stored)||!stored.length)return;
+ const map=new Map(channels.map(c=>[c.url,c]));
+ stored.forEach(c=>{if(c&&typeof c.name==="string"&&isValidHttpUrl(c.url)&&!map.has(c.url))map.set(c.url,c);});
+ if(map.size!==channels.length){channels=Array.from(map.values());try{localStorage.setItem("ashika_channels",JSON.stringify(channels));}catch(_){}render();renderPlayerChannels();}
 }
 function isValidHttpUrl(u) {
  return /^https?:\/\/.+/i.test((u || "").trim());
@@ -888,6 +929,18 @@ function uploadPlaylistFile(event) {
   event.target.value = "";
  };
  reader.readAsText(file);
+}
+async function ashikaAddPlaylist() {
+ const field=document.getElementById("newPlaylistUrl"),url=(field.value||"").trim(),status=document.getElementById("status");
+ if(!isValidHttpUrl(url)){status.textContent="Enter a valid HTTP/HTTPS playlist URL.";return;}
+ if(savedPlaylists.includes(url)){status.textContent="This playlist is already saved. Refresh it from Saved Playlists.";return;}
+ savedPlaylists.push(url);
+ try{localStorage.setItem("ashika_playlists",JSON.stringify(savedPlaylists));}catch(_){}
+ field.value="";
+ renderPlaylistManager();
+ status.textContent="Playlist saved. Loading now…";
+ await loadPlaylist(url);
+ renderPlaylistManager();
 }
 function renderPlaylistManager() {
  const box = document.getElementById("playlistManager");
@@ -1421,7 +1474,7 @@ window.addEventListener("error", event => {
  const box = document.getElementById("channels");
  if (box && !channels.length) box.textContent = "App startup error: " + (event.message || "Unknown error");
 });
-window.addEventListener("load", () => { setAppLanguage(ashikaLanguage); setTimeout(dismissSplash, 500); setTimeout(async () => { const startupUrls = [...new Set([DEFAULT_PLAYLIST, ...savedPlaylists])]; for (const playlistUrl of startupUrls) { await loadPlaylist(playlistUrl); } }, 300); });
+window.addEventListener("load", () => { setAppLanguage(ashikaLanguage); setTimeout(dismissSplash, 500); setTimeout(async () => { await ashikaRestoreInternalChannels(); const startupUrls = [...new Set([DEFAULT_PLAYLIST, ...savedPlaylists])]; for (const playlistUrl of startupUrls) { await loadPlaylist(playlistUrl); } }, 300); });
 window.addEventListener("beforeunload", () => { commitWatchTime(); persistProfiles(); });
 </script>
 </body>
