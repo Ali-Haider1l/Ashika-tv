@@ -502,15 +502,15 @@ function playChannel(c) {
  video.onloadedmetadata=ashikaRefreshTracks;
  const isHls=/\.m3u8(\?|$)/i.test(c.url);
  const nativeHls=isHls&&!hasHeaders&&video.canPlayType("application/vnd.apple.mpegurl")!=="";
- if(isHls&&window.Hls&&Hls.isSupported()){
+ if(nativeHls){video.src=c.url;video.play().catch(()=>{});}
+ else if(isHls&&window.Hls&&Hls.isSupported()){
   hlsInstance=new Hls({enableWorker:false,lowLatencyMode:false,backBufferLength:30,xhrSetup:(xhr)=>{Object.keys(headers).forEach(k=>{try{xhr.setRequestHeader(k,String(headers[k]));}catch(_){}});}});
   hlsInstance.on(Hls.Events.ERROR,(_event,data)=>{if(data&&data.fatal){document.getElementById("playingName").textContent=c.name+" • HLS "+data.details;if(data.type===Hls.ErrorTypes.NETWORK_ERROR)hlsInstance.startLoad();else if(data.type===Hls.ErrorTypes.MEDIA_ERROR)hlsInstance.recoverMediaError();else{hlsInstance.destroy();hlsInstance=null;}}});
   hlsInstance.on(Hls.Events.MANIFEST_PARSED,()=>video.play().catch(()=>{}));
   hlsInstance.on(Hls.Events.SUBTITLE_TRACKS_UPDATED,ashikaRefreshTracks);
   hlsInstance.on(Hls.Events.AUDIO_TRACKS_UPDATED,ashikaRefreshTracks);
   hlsInstance.loadSource(c.url);hlsInstance.attachMedia(video);
- }else if(nativeHls){video.src=c.url;video.play().catch(()=>{});}
- else{if(hasHeaders)document.getElementById("healthResult").textContent="This stream requires custom HTTP headers. LG native video cannot send custom headers; only HLS.js playback can apply them. If HLS.js is unavailable, this stream may not play.";video.src=c.url;video.play().catch(()=>{});}
+ }else{if(hasHeaders)document.getElementById("healthResult").textContent="This stream requires custom HTTP headers. LG native video cannot send custom headers; only HLS.js playback can apply them. If HLS.js is unavailable, this stream may not play.";video.src=c.url;video.play().catch(()=>{});}
 
  recent = [c.url, ...recent.filter(x => x !== c.url)].slice(0, 30);
  persistProfiles();
