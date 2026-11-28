@@ -93,6 +93,57 @@ jobs:
           for fn in ("ashikaSaveRelaySettings", "ashikaTestRelay", "ashikaBuildRelayUrl"):
               assert ("function " + fn + "(") in webos, f"Missing relay integration: {fn}"
           assert "playbackUrl" in webos and "Buffered Ahead" in webos, "Relay playback / expanded diagnostics are missing"
+          # Audit the real Android Compose screens rather than comparing only two HTML files.
+          android_root = pathlib.Path("app/src/main/java/com/example/ui")
+          android_sources = {
+              "app": (android_root / "AshikaApp.kt").read_text(),
+              "channels": (android_root / "screens/ChannelsScreen.kt").read_text(),
+              "epg": (android_root / "screens/EpgScreen.kt").read_text(),
+              "favorites": (android_root / "screens/FavoritesScreen.kt").read_text(),
+              "playlists": (android_root / "screens/PlaylistsScreen.kt").read_text(),
+              "more": (android_root / "screens/MoreMenuScreen.kt").read_text(),
+              "tools": (android_root / "screens/ToolsScreen.kt").read_text(),
+              "admin": (android_root / "screens/AdminScreen.kt").read_text(),
+              "player": (android_root / "components/LivePlayerPanel.kt").read_text(),
+              "dialogs": (android_root / "components/ChannelDialogs.kt").read_text(),
+              "viewmodel": (android_root / "AshikaViewModel.kt").read_text(),
+          }
+          android_required = {
+              "app": ["ROUTE_CHANNELS", "ROUTE_EPG", "ROUTE_FAVORITES", "ROUTE_PLAYLISTS", "ROUTE_MORE"],
+              "channels": ["fun ChannelsScreen("],
+              "epg": ["fun EpgScreen("],
+              "favorites": ["fun FavoritesScreen("],
+              "playlists": ["fun PlaylistsScreen("],
+              "more": ["fun MoreMenuScreen("],
+              "tools": ["fun ToolsScreen("],
+              "admin": ["fun AdminScreen("],
+              "player": ["fun FullscreenPlayerOverlay(", "fun StreamDiagnosticsPanel("],
+              "dialogs": ["fun ChannelPreviewBottomSheet(", "fun LanguageSelectorDialog("],
+              "viewmodel": ["fun loadPlaylistUrl(", "fun importLocalM3u(", "fun loadEpgUrl(", "fun importLocalEpg(", "fun toggleFavorite(", "fun runChannelFinder(", "fun generatePairingCode(", "fun saveAndRefreshAdminPlaylists("],
+          }
+          for source_name, tokens in android_required.items():
+              for token in tokens:
+                  assert token in android_sources[source_name], f"Android source contract missing: {source_name}: {token}"
+          webos_parity_ids = [
+              "channels", "categories", "player", "playerChannelList", "epgPanel", "favorites",
+              "recent", "settingsModal", "playlistManager", "adminPanel", "channelPreviewModal",
+              "languageModal", "sportsPanel", "healthPanel", "statsPanel", "matchPanel",
+              "familyPanel", "remotePanel", "subtitleSelect", "audioSelect", "miniPipBtn",
+              "backupFile", "relayEndpoint"
+          ]
+          for element_id in webos_parity_ids:
+              assert re.search(r"\\bid=[\\\"']" + re.escape(element_id) + r"[\\\"']", webos), f"Android parity UI missing in webOS: {element_id}"
+          webos_parity_functions = [
+              "openChannelPreview", "setAppLanguage", "ashikaDeleteProfile", "ashikaLoadEpg",
+              "ashikaImportEpg", "ashikaExportBackup", "ashikaImportBackup", "ashikaToggleMiniPip",
+              "ashikaSelectSubtitle", "ashikaSelectAudio", "ashikaSyncPhonePlaylist",
+              "ashikaAskFinder", "ashikaCheckHealth", "ashikaCreatePair", "ashikaAddMatch",
+              "ashikaSwitchProfile", "refreshAdminPlaylists"
+          ]
+          for fn in webos_parity_functions:
+              assert re.search(r"function\\s+" + re.escape(fn) + r"\\s*\\(", webos), f"Android parity behavior missing in webOS: {fn}"
+          print("Android Compose screen contract and webOS parity controls validated")
+
           import subprocess
           subprocess.run(["node", "--check", "relay/api/relay.js"], check=True)
           json.loads(pathlib.Path("relay/package.json").read_text())
@@ -116,7 +167,7 @@ jobs:
           mkdir -p dist
           ares-config --profile tv
           ares-package --no-minify --outdir dist webos
-          test -s dist/com.ashika.livetv_9.3.0_all.ipk
+          test -s dist/com.ashika.livetv_9.4.0_all.ipk
           ares-package --info dist/com.ashika.livetv_9.3.0_all.ipk
 
       - name: Verify packaged IPK contents
@@ -140,7 +191,7 @@ jobs:
       - name: Upload IPK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Ashika-TV-webOS-IPK-v9.3.0
+          name: Ashika-TV-webOS-IPK-v9.4.0
           path: dist/*.ipk
           retention-days: 90
 
@@ -148,8 +199,8 @@ jobs:
         if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: webos-v9.3.0
+          tag_name: webos-v9.4.0
           target_commitish: main
-          name: Ashika TV webOS v9.3.0
+          name: Ashika TV webOS v9.4.0
           generate_release_notes: true
           files: dist/*.ipk
