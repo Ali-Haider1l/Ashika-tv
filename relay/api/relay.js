@@ -87,7 +87,12 @@ module.exports = async function handler(req, res) {
       if (![301,302,303,307,308].includes(upstream.status)) break;
       const location = upstream.headers.get("location");
       if (!location || i === MAX_REDIRECTS) throw new Error("Too many or invalid upstream redirects");
-      target = await validateTarget(new URL(location, target).href);
+      const nextTarget = await validateTarget(new URL(location, target).href);
+      if (nextTarget.origin !== target.origin) {
+        delete headers.Cookie;
+        delete headers.cookie;
+      }
+      target = nextTarget;
     }
     if (!upstream) throw new Error("Upstream request failed");
     const type = (upstream.headers.get("content-type") || "").toLowerCase();
