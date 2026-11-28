@@ -324,6 +324,8 @@ let editingChannelUrl = null;
 let category = "All";
 let page = "all";
 let hlsInstance = null;
+let epgData = JSON.parse(localStorage.getItem("ashika_epg_data") || "[]");
+let epgChannelNames = JSON.parse(localStorage.getItem("ashika_epg_channels") || "{}");
 let watchTimerStart = 0;
 
 function loadProfileArrays() {
@@ -463,15 +465,30 @@ function playChannel(c) {
  document.getElementById("playerBox").style.display = "block";
 
  if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
- if (/\.m3u8(\?|$)/i.test(c.url) && window.Hls && Hls.isSupported()) {
-  hlsInstance = new Hls();
-  hlsInstance.loadSource(c.url);
-  hlsInstance.attachMedia(video);
+ video.pause(); video.removeAttribute("src"); video.load(); ashikaResetTrackSelectors();
+ video.onerror = () => {
+  const code = video.error ? video.error.code : 0;
+  document.getElementById("playingName").textContent = c.name + " • Playback error " + code;
+  document.getElementById("healthResult").textContent = "Playback error " + code + ". Verify stream URL, codec, network and availability.";
+ };
+ video.onloadedmetadata = ashikaRefreshTracks;
+ const isHls = /\.m3u8(\?|$)/i.test(c.url);
+ const nativeHls = isHls && video.canPlayType("application/vnd.apple.mpegurl") !== "";
+ if (nativeHls) {
+  video.src = c.url; video.play().catch(() => {});
+ } else if (isHls && window.Hls && Hls.isSupported()) {
+  hlsInstance = new Hls({ enableWorker: false, lowLatencyMode: false, backBufferLength: 30 });
+  hlsInstance.on(Hls.Events.ERROR, (_event, data) => {
+   if (data && data.fatal) {
+    document.getElementById("playingName").textContent = c.name + " • HLS " + data.details;
+    if (data.type === Hls.ErrorTypes.NETWORK_ERROR) hlsInstance.startLoad();
+    else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hlsInstance.recoverMediaError();
+    else { hlsInstance.destroy(); hlsInstance = null; }
+   }
+  });
   hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
- } else {
-  video.src = c.url;
-  video.play().catch(() => {});
- }
+  hlsInstance.loadSource(c.url); hlsInstance.attachMedia(video);
+ } else { video.src = c.url; video.play().catch(() => {}); }
 
  recent = [c.url, ...recent.filter(x => x !== c.url)].slice(0, 30);
  persistProfiles();
@@ -530,8 +547,8 @@ function parseM3uText(text, source = "playlist") {
    group = gm && gm[1].trim() ? gm[1].trim() : "Other";
    logo = lm ? lm[1].trim() : "";
   } else if (!line.startsWith("#") && name) {
-   if (isValidHttpUrl(line)) out.push({ name, group, logo, url: line, source });
-   name = ""; group = "Other"; logo = "";
+   if (isValidHttpUrl(line)) out.push({ name, group, logo, tvgId, url: line, source });
+   name = ""; group = "Other"; logo = ""; tvgId = "";
   }
  }
  return out;
@@ -871,6 +888,33 @@ async function ashikaSyncPhonePlaylist() {
   status.textContent = "Companion sync unavailable: " + e.message;
  }
 }
+
+function ashikaOpenUrl(url){window.open(url,"_blank","noopener");}
+function ashikaResetTrackSelectors(){const sub=document.getElementById("subtitleSelect"),aud=document.getElementById("audioSelect");if(sub)sub.innerHTML='<option value="-1">Off / Auto</option>';if(aud)aud.innerHTML='<option value="-1">Default</option>';}
+function ashikaRefreshTracks(){
+ const sub=document.getElementById("subtitleSelect"),aud=document.getElementById("audioSelect");if(!sub||!aud)return;ashikaResetTrackSelectors();
+ [...videoEl.textTracks].forEach((t,i)=>{const o=document.createElement("option");o.value=String(i);o.textContent=t.label||t.language||("Subtitle "+(i+1));sub.appendChild(o);});
+ const tracks=videoEl.audioTracks;if(tracks)for(let i=0;i<tracks.length;i++){const t=tracks[i],o=document.createElement("option");o.value=String(i);o.textContent=t.label||t.language||("Audio "+(i+1));aud.appendChild(o);}
+}
+function ashikaSelectSubtitle(value){const n=Number(value);[...videoEl.textTracks].forEach((t,i)=>t.mode=n===i?"showing":"disabled");}
+function ashikaSelectAudio(value){const n=Number(value),tracks=videoEl.audioTracks;if(!tracks)return;for(let i=0;i<tracks.length;i++)tracks[i].enabled=n<0||n===i;}
+function ashikaParseXmltv(xml){
+ const doc=new DOMParser().parseFromString(xml,"application/xml");if(doc.querySelector("parsererror"))throw new Error("Invalid XMLTV document.");
+ const names={};doc.querySelectorAll("channel").forEach(ch=>{const id=ch.getAttribute("id")||"",nm=ch.querySelector("display-name")?.textContent?.trim()||id;if(id)names[id]=nm;});
+ const programs=[];doc.querySelectorAll("programme").forEach(p=>{const start=ashikaXmltvDate(p.getAttribute("start")),stop=ashikaXmltvDate(p.getAttribute("stop")),channel=p.getAttribute("channel")||"",title=p.querySelector("title")?.textContent?.trim()||"Programme",desc=p.querySelector("desc")?.textContent?.trim()||"";if(start&&stop&&channel)programs.push({channel,channelName:names[channel]||channel,title,desc,start,stop});});return {channels:names,programs};
+}
+function ashikaXmltvDate(raw){if(!raw)return 0;const m=raw.match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})?\s*([+-]\d{4}|Z)?/);if(!m)return 0;const iso=m[1]+"-"+m[2]+"-"+m[3]+"T"+m[4]+":"+m[5]+":"+(m[6]||"00")+(m[7]&&m[7]!=="Z"?m[7].slice(0,3)+":"+m[7].slice(3):"Z");const n=Date.parse(iso);return Number.isFinite(n)?n:0;}
+async function ashikaLoadEpg(){
+ const url=document.getElementById("epgUrl").value.trim(),status=document.getElementById("epgStatus");if(!isValidHttpUrl(url)){status.textContent="Enter a valid XMLTV HTTP/HTTPS URL.";return;}status.textContent="Loading XMLTV guide...";
+ try{const res=await fetch(url);if(!res.ok)throw new Error("HTTP "+res.status);const data=ashikaParseXmltv(await res.text());epgData=data.programs;epgChannelNames=data.channels;localStorage.setItem("ashika_epg_data",JSON.stringify(epgData));localStorage.setItem("ashika_epg_channels",JSON.stringify(epgChannelNames));localStorage.setItem("ashika_epg_url",url);status.textContent="Loaded "+epgData.length+" programmes for "+Object.keys(epgChannelNames).length+" channels.";ashikaRenderEpg();}catch(e){status.textContent="EPG load failed: "+e.message+" (Some providers block CORS from TV browsers.)";}
+}
+function ashikaImportEpg(event){const file=event.target.files&&event.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=()=>{try{const d=ashikaParseXmltv(String(reader.result));epgData=d.programs;epgChannelNames=d.channels;localStorage.setItem("ashika_epg_data",JSON.stringify(epgData));localStorage.setItem("ashika_epg_channels",JSON.stringify(epgChannelNames));document.getElementById("epgStatus").textContent="Imported "+epgData.length+" programmes.";ashikaRenderEpg();}catch(e){document.getElementById("epgStatus").textContent="Import failed: "+e.message;}};reader.readAsText(file);event.target.value="";}
+function ashikaRenderEpg(){
+ const box=document.getElementById("epgPrograms"),status=document.getElementById("epgStatus");if(!box||!status)return;box.innerHTML="";const now=Date.now(),current=epgData.filter(p=>p.start<=now&&p.stop>now),upcoming=epgData.filter(p=>p.start>now).sort((a,b)=>a.start-b.start).slice(0,100),rows=current.concat(upcoming);status.textContent=epgData.length?"EPG: "+epgData.length+" programmes • "+current.length+" on now • "+upcoming.length+" upcoming":"No EPG loaded. Add an XMLTV URL or import a local XML file.";
+ const norm=x=>String(x||"").toLowerCase().replace(/[^a-z0-9]/g,"");rows.slice(0,100).forEach(p=>{const ch=channels.find(c=>(c.tvgId&&c.tvgId===p.channel)||norm(c.name)===norm(p.channelName)||norm(c.name)===norm(p.channel));const row=document.createElement("div");row.className="adminItem";const label=document.createElement("span");label.textContent=(ch?ch.name:p.channelName)+" • "+new Date(p.start).toLocaleString()+" – "+new Date(p.stop).toLocaleTimeString()+" • "+p.title+(p.desc?" — "+p.desc:"");row.appendChild(label);if(ch){const play=document.createElement("button");play.className="action primary";play.textContent="Play";play.onclick=()=>playChannel(ch);row.appendChild(play);}box.appendChild(row);});
+}
+function ashikaClearEpg(){epgData=[];epgChannelNames={};localStorage.removeItem("ashika_epg_data");localStorage.removeItem("ashika_epg_channels");ashikaRenderEpg();}
+
 function openToffee() { window.open("https://toffeelive.com", "_blank", "noopener"); }
 function showAbout() { alert("Ashika Live TV v9.1.0\nFree and authorized M3U / HLS streams only."); }
 function dismissSplash() {
@@ -901,7 +945,8 @@ document.addEventListener("keydown", e => {
 });
 
 loadProfileArrays();
-render();
+if(localStorage.getItem("ashika_epg_url"))document.getElementById("epgUrl").value=localStorage.getItem("ashika_epg_url");
+render();ashikaRenderEpg();
 if (!localStorage.getItem("ashika_seeded")) {
  localStorage.setItem("ashika_seeded", "1");
  if (!savedPlaylists.includes(DEFAULT_PLAYLIST)) {
