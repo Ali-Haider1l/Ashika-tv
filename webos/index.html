@@ -478,30 +478,22 @@ function playChannel(c) {
  document.getElementById("playerBox").style.display = "block";
 
  if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
- video.pause(); video.removeAttribute("src"); video.load(); ashikaResetTrackSelectors();
- video.onerror = () => {
-  const code = video.error ? video.error.code : 0;
-  document.getElementById("playingName").textContent = c.name + " • Playback error " + code;
-  document.getElementById("healthResult").textContent = "Playback error " + code + ". Verify stream URL, codec, network and availability.";
- };
- video.onloadedmetadata = ashikaRefreshTracks;
- const isHls = /\.m3u8(\?|$)/i.test(c.url);
- const nativeHls = isHls && video.canPlayType("application/vnd.apple.mpegurl") !== "";
- if (nativeHls) {
-  video.src = c.url; video.play().catch(() => {});
- } else if (isHls && window.Hls && Hls.isSupported()) {
-  hlsInstance = new Hls({ enableWorker: false, lowLatencyMode: false, backBufferLength: 30 });
-  hlsInstance.on(Hls.Events.ERROR, (_event, data) => {
-   if (data && data.fatal) {
-    document.getElementById("playingName").textContent = c.name + " • HLS " + data.details;
-    if (data.type === Hls.ErrorTypes.NETWORK_ERROR) hlsInstance.startLoad();
-    else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hlsInstance.recoverMediaError();
-    else { hlsInstance.destroy(); hlsInstance = null; }
-   }
-  });
-  hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
-  hlsInstance.loadSource(c.url); hlsInstance.attachMedia(video);
- } else { video.src = c.url; video.play().catch(() => {}); }
+ video.pause();video.removeAttribute("src");video.load();ashikaResetTrackSelectors();
+ const headers=c.headers&&typeof c.headers==="object"?c.headers:{};
+ const hasHeaders=Object.keys(headers).length>0;
+ video.onerror=()=>{const code=video.error?video.error.code:0;document.getElementById("playingName").textContent=c.name+" • Playback error "+code;document.getElementById("healthResult").textContent="Playback error "+code+". Check stream URL, codec, required headers, network and provider availability.";};
+ video.onloadedmetadata=ashikaRefreshTracks;
+ const isHls=/\.m3u8(\?|$)/i.test(c.url);
+ const nativeHls=isHls&&!hasHeaders&&video.canPlayType("application/vnd.apple.mpegurl")!=="";
+ if(isHls&&window.Hls&&(Hls.isSupported()||nativeHls===false)){
+  hlsInstance=new Hls({enableWorker:false,lowLatencyMode:false,backBufferLength:30,xhrSetup:(xhr)=>{Object.keys(headers).forEach(k=>{try{xhr.setRequestHeader(k,String(headers[k]));}catch(_){}});}});
+  hlsInstance.on(Hls.Events.ERROR,(_event,data)=>{if(data&&data.fatal){document.getElementById("playingName").textContent=c.name+" • HLS "+data.details;if(data.type===Hls.ErrorTypes.NETWORK_ERROR)hlsInstance.startLoad();else if(data.type===Hls.ErrorTypes.MEDIA_ERROR)hlsInstance.recoverMediaError();else{hlsInstance.destroy();hlsInstance=null;}}});
+  hlsInstance.on(Hls.Events.MANIFEST_PARSED,()=>video.play().catch(()=>{}));
+  hlsInstance.on(Hls.Events.SUBTITLE_TRACKS_UPDATED,ashikaRefreshTracks);
+  hlsInstance.on(Hls.Events.AUDIO_TRACKS_UPDATED,ashikaRefreshTracks);
+  hlsInstance.loadSource(c.url);hlsInstance.attachMedia(video);
+ }else if(nativeHls){video.src=c.url;video.play().catch(()=>{});}
+ else{if(hasHeaders)document.getElementById("healthResult").textContent="This stream requires custom HTTP headers. LG native video cannot send custom headers; only HLS.js playback can apply them. If HLS.js is unavailable, this stream may not play.";video.src=c.url;video.play().catch(()=>{});}
 
  recent = [c.url, ...recent.filter(x => x !== c.url)].slice(0, 30);
  persistProfiles();
@@ -545,27 +537,65 @@ function fullscreenPlayer() {
  else if (p.requestFullscreen) p.requestFullscreen();
 }
 
+function ashikaHeaderName(k){
+ const x=String(k||"").trim().toLowerCase();
+ return x==="useragent"||x==="user-agent"?"User-Agent":x==="referrer"||x==="referer"?"Referer":x==="cookie"?"Cookie":x==="origin"?"Origin":String(k||"").trim();
+}
+function ashikaParseHeaderQuery(raw,target){
+ String(raw||"").split("&").forEach(pair=>{
+  const i=pair.indexOf("=");if(i<=0)return;
+  let k=pair.slice(0,i),v=pair.slice(i+1);
+  try{k=decodeURIComponent(k.replace(/\+/g," "));v=decodeURIComponent(v.replace(/\+/g," "));}catch(_){}
+  if(k&&v)target[ashikaHeaderName(k)]=v;
+ });
+}
+function ashikaParseJsonPlaylist(raw,source){
+ let root;try{root=JSON.parse(raw);}catch(_){return [];}
+ const arr=Array.isArray(root)?root:(root.channels||root.data||root.items||[]);
+ if(!Array.isArray(arr))return [];
+ const out=[];
+ arr.forEach(o=>{
+  if(!o||typeof o!=="object")return;
+  const name=o.name||o.title||o.channel_name||o.channelName;
+  const url=o.link||o.url||o.stream_url||o.streamUrl||o.hls_url||o.hlsUrl;
+  if(!name||!isValidHttpUrl(url))return;
+  const headers={};if(o.headers&&typeof o.headers==="object")Object.keys(o.headers).forEach(k=>{if(o.headers[k])headers[ashikaHeaderName(k)]=String(o.headers[k]);});
+  if(o.cookie&&!headers.Cookie)headers.Cookie=String(o.cookie);
+  if((o.user_agent||o.userAgent)&&!headers["User-Agent"])headers["User-Agent"]=String(o.user_agent||o.userAgent);
+  out.push({name:String(name),group:o.category||o.category_name||o.group||o.group_title||o.genre||"Toffee Live",logo:o.logo||o.icon||o.tvg_logo||o.image||o.thumbnail||"",tvgId:o.tvg_id||o.tvgId||o.epg_id||o.id||"",url,source,headers});
+ });
+ return out;
+}
 function parseM3uText(text, source = "playlist") {
- const lines = String(text || "").split(/\r?\n/);
- const out = [];
- let name = "", group = "Other", logo = "", tvgId = "";
- for (let raw of lines) {
-  const line = raw.trim();
-  if (!line) continue;
-  if (line.toUpperCase().startsWith("#EXTINF")) {
-   const comma = line.lastIndexOf(",");
-   name = comma >= 0 ? line.substring(comma + 1).trim() || "Unknown Channel" : "Unknown Channel";
-   const gm = line.match(/group-title="([^"]*)"/i);
-   const lm = line.match(/tvg-logo="([^"]*)"/i);
-   const tm = line.match(/tvg-id="([^"]*)"/i);
-   group = gm && gm[1].trim() ? gm[1].trim() : "Other";
-   logo = lm ? lm[1].trim() : "";
-   tvgId = tm ? tm[1].trim() : "";
-  } else if (!line.startsWith("#") && name) {
-   if (isValidHttpUrl(line)) out.push({ name, group, logo, tvgId, url: line, source });
-   name = ""; group = "Other"; logo = ""; tvgId = "";
+ const rawText=String(text||"").replace(/^\uFEFF/,"").trim();
+ if(rawText.startsWith("{")||rawText.startsWith("[")){const json=ashikaParseJsonPlaylist(rawText,source);if(json.length)return json;}
+ const lines=rawText.split(/\r?\n/),out=[];
+ let name="",group="Other",logo="",tvgId="",tvgName="",headers={},epgUrl="";
+ const reset=()=>{name="";group="Other";logo="";tvgId="";tvgName="";headers={};};
+ for(const raw of lines){
+  const line=raw.trim();if(!line)continue;
+  if(/^#EXTM3U/i.test(line)){
+   const epg=line.match(/(?:url-tvg|x-tvg-url)=["']([^"']+)["']/i);if(epg)epgUrl=epg[1];
+  }else if(/^#EXTINF/i.test(line)){
+   let comma=-1,quoted=false,q="";
+   for(let i=0;i<line.length;i++){const c=line[i];if((c==='"'||c==="'")&&(!quoted||q===c)){quoted=!quoted;q=quoted?c:"";}else if(c===","&&!quoted){comma=i;break;}}
+   const attrs=line.slice(0,comma<0?line.length:comma);
+   const attr=k=>{const m=attrs.match(new RegExp(k+'=(?:"([^"]*)"|\\'([^\\']*)\\'|([^\\\\s,]+))',"i"));return m?(m[1]||m[2]||m[3]||"").trim():"";};
+   tvgId=attr("tvg-id");tvgName=attr("tvg-name");logo=attr("tvg-logo");group=attr("group-title")||"Other";
+   name=(comma>=0?line.slice(comma+1).trim():"")||tvgName||"Unknown Channel";
+  }else if(/^#EXTGRP:/i.test(line)){group=line.slice(line.indexOf(":")+1).trim()||group;
+  }else if(/^#EXTVLCOPT:/i.test(line)){
+   const opt=line.slice(line.indexOf(":")+1),i=opt.indexOf("=");if(i>0){const k=opt.slice(0,i).trim().toLowerCase(),v=opt.slice(i+1).trim();if(k==="http-user-agent")headers["User-Agent"]=v;else if(k==="http-referrer"||k==="http-referer")headers.Referer=v;else if(k==="http-origin")headers.Origin=v;}
+  }else if(/^#EXTHTTP:/i.test(line)){
+   try{const h=JSON.parse(line.slice(line.indexOf(":")+1));Object.keys(h).forEach(k=>{if(h[k])headers[ashikaHeaderName(k)]=String(h[k]);});}catch(_){}
+  }else if(/^#KODIPROP:inputstream\.adaptive\.stream_headers=/i.test(line)){ashikaParseHeaderQuery(line.slice(line.indexOf("=")+1),headers);
+  }else if(!line.startsWith("#")&&(name||/^#EXTM3U/i.test(rawText))){
+   const pipe=line.indexOf("|"),url=(pipe>=0?line.slice(0,pipe):line).trim();if(pipe>=0)ashikaParseHeaderQuery(line.slice(pipe+1),headers);
+   if(isValidHttpUrl(url))out.push({name:name||url.split("/").pop().split("?")[0]||"Live Channel",group,logo,tvgId,url,source,headers:{...headers}});
+   reset();
   }
  }
+ if(epgUrl)localStorage.setItem("ashika_playlist_epg_url",epgUrl);
  return out;
 }
 function mergeChannels(incoming) {
