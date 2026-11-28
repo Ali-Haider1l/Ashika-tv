@@ -16,9 +16,9 @@ const htmlPath = path.join(outputDir, "index.html");
 const html = fs.readFileSync(htmlPath, "utf8");
 let transformedCount = 0;
 
-const output = html.replace(/<script\\b([^>]*)>([\\s\\S]*?)<\\/script>/gi, (tag, attributes, code) => {
-  if (!code.trim() || /\\bsrc\\s*=/i.test(attributes)) return tag;
-  if (/\\btype\\s*=\\s*["'](?:application\\/json|importmap)["']/i.test(attributes)) return tag;
+const output = html.replace(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi, (tag, attributes, code) => {
+  if (!code.trim() || /\bsrc\s*=/i.test(attributes)) return tag;
+  if (/\btype\s*=\s*["'](?:application\/json|importmap)["']/i.test(attributes)) return tag;
 
   const transformed = babel.transformSync(code, {
     babelrc: false,
@@ -35,7 +35,7 @@ const output = html.replace(/<script\\b([^>]*)>([\\s\\S]*?)<\\/script>/gi, (tag,
   });
 
   transformedCount += 1;
-  return "<script" + attributes + ">\\n" + transformed.code + "\\n</script>";
+  return "<script" + attributes + ">\n" + transformed.code + "\n</script>";
 });
 
 if (transformedCount === 0) throw new Error("No inline JavaScript was transpiled");
