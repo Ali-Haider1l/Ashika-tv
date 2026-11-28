@@ -114,8 +114,13 @@ body.ashika-mini-pip #playerBox{position:fixed!important;right:14px;bottom:14px;
   <button class="active" onclick="showPage('all',this)">▣ All Channels</button>
   <button onclick="showPage('favorites',this)">♥ My Favorites</button>
   <button onclick="showPage('recent',this)">◷ Recently Watched</button>
+  <button onclick="ashikaOpenFeature('epgPanel')">📅 TV Guide / EPG</button>
+  <button onclick="openSettings()">▤ Playlists & Sync</button>
   <button onclick="openToffee()">📺 Toffee Live</button>
-  <button onclick="openSettings()">⚙ Settings / Playlist</button>
+  <button onclick="ashikaOpenFeature('sportsPanel')">🏏 Live Sports</button>
+  <button onclick="ashikaOpenFeature('aiPanel')">🔎 Channel Finder</button>
+  <button onclick="ashikaOpenFeature('healthPanel')">🩺 Stream Health</button>
+  <button onclick="ashikaOpenFeature('familyPanel')">👨‍👩‍👧 Family Profiles</button>
   <button onclick="openAdmin()">🛡 Admin Panel</button>
   <button onclick="showAbout()">ⓘ About</button>
  </aside>
