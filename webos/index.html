@@ -382,17 +382,32 @@ body.ashika-mini-pip #playerBox{position:fixed!important;right:14px;bottom:14px;
 const DEFAULT_PLAYLIST = "https://github.com/abusaeeidx/Mrgify-BDIX-IPTV/raw/main/playlist.m3u";
 const DEFAULT_RELAY_ENDPOINT = "https://ashika-tv-relay.vercel.app/api/relay";
 const KOLKATA_TV = { name: "Kolkata TV", group: "India News", logo: "", url: "https://d35j504z0x2vu2.cloudfront.net/v1/master/0bc8e8376bd8417a1b6761138aa41c26c7309312/kolkata-tv/index.m3u8", source: "built-in" };
-let channels = JSON.parse(localStorage.getItem("ashika_channels") || "[]");
+// webOS storage can contain stale or partially written JSON after an app update.
+// Validate persisted values before using them so one bad record cannot stop the whole UI.
+function ashikaReadJson(key, fallback) {
+ try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; }
+ catch (_) { return fallback; }
+}
+function ashikaReadString(key, fallback) {
+ try { return localStorage.getItem(key) || fallback; }
+ catch (_) { return fallback; }
+}
+const storedChannels = ashikaReadJson("ashika_channels", []);
+let channels = (Array.isArray(storedChannels) ? storedChannels : [])
+ .filter(c => c && typeof c === "object" && typeof c.name === "string" && isValidHttpUrl(c.url));
 if (!channels.some(c => c.url === KOLKATA_TV.url)) {
  channels.unshift(KOLKATA_TV);
- localStorage.setItem("ashika_channels", JSON.stringify(channels));
+ try { localStorage.setItem("ashika_channels", JSON.stringify(channels)); } catch (_) {}
 }
-let savedPlaylists = JSON.parse(localStorage.getItem("ashika_playlists") || "[]");
-let profiles = JSON.parse(localStorage.getItem("ashika_profiles") || "null");
-let activeProfile = localStorage.getItem("ashika_active_profile") || "Default";
+const storedPlaylists = ashikaReadJson("ashika_playlists", []);
+let savedPlaylists = (Array.isArray(storedPlaylists) ? storedPlaylists : []).filter(isValidHttpUrl);
+let profiles = ashikaReadJson("ashika_profiles", null);
+let activeProfile = ashikaReadString("ashika_active_profile", "Default");
 if (!Array.isArray(profiles) || !profiles.length) {
- profiles = [{ name: "Default", favorites: JSON.parse(localStorage.getItem("ashika_favs") || "[]"), recent: JSON.parse(localStorage.getItem("ashika_recent") || "[]") }];
+ profiles = [{ name: "Default", favorites: ashikaReadJson("ashika_favs", []), recent: ashikaReadJson("ashika_recent", []) }];
 }
+profiles = profiles.filter(p => p && typeof p.name === "string" && p.name.trim());
+if (!profiles.length) profiles = [{ name: "Default", favorites: [], recent: [] }];
 let favorites = [];
 let recent = [];
 let currentChannelUrl = "";
@@ -400,8 +415,10 @@ let editingChannelUrl = null;
 let category = "All";
 let page = "all";
 let hlsInstance = null;
-let epgData = JSON.parse(localStorage.getItem("ashika_epg_data") || "[]");
-let epgChannelNames = JSON.parse(localStorage.getItem("ashika_epg_channels") || "{}");
+const storedEpg = ashikaReadJson("ashika_epg_data", []);
+let epgData = Array.isArray(storedEpg) ? storedEpg : [];
+const storedEpgNames = ashikaReadJson("ashika_epg_channels", {});
+let epgChannelNames = storedEpgNames && typeof storedEpgNames === "object" && !Array.isArray(storedEpgNames) ? storedEpgNames : {};
 let watchTimerStart = 0;
 let lastPlaybackError = "";
 
@@ -1211,19 +1228,28 @@ function dismissSplash() {
  if (s) { s.style.opacity = "0"; setTimeout(() => s.remove(), 400); }
 }
 
+// LG webOS remotes report different key/keyCode values across TV models.
+// Normalize them and keep all interactive controls reachable with the D-pad.
 document.addEventListener("keydown", e => {
- const key = e.key || "";
- // LG remotes can report the OK button as Enter, Select, or keyCode 23/66.
- if (key === "Enter" || key === "Select" || key === "OK" || e.keyCode === 23 || e.keyCode === 66) {
-  const active = document.activeElement;
-  if (active && active.matches("button:not([disabled]), input[type=button], input[type=submit], .channel[tabindex]")) {
+ const code = e.which || e.keyCode || 0;
+ const keyMap = {13:"Enter",23:"Select",66:"Select",461:"Back",37:"ArrowLeft",38:"ArrowUp",39:"ArrowRight",40:"ArrowDown"};
+ const key = e.key && e.key !== "Unidentified" ? e.key : (keyMap[code] || "");
+ const isControl = el => el && el.matches("button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), .channel");
+ if (key === "Enter" || key === "Select" || key === "OK" || code === 13 || code === 23 || code === 66) {
+  let active = document.activeElement;
+  if (!isControl(active) || !active.getClientRects().length) {
+   const first = [...document.querySelectorAll("button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), .channel")]
+    .find(el => el.getClientRects().length && getComputedStyle(el).visibility !== "hidden" && !el.closest("[hidden]"));
+   if (first) { first.focus(); active = first; }
+  }
+  if (isControl(active) && active.getClientRects().length) {
    e.preventDefault();
    e.stopPropagation();
    active.click();
    return;
   }
  }
- if (key === "Escape" || key === "Back" || e.keyCode === 461) {
+ if (key === "Escape" || key === "Back" || code === 461) {
   const openModal = [...document.querySelectorAll(".modal")].find(m => getComputedStyle(m).display !== "none");
   if (openModal) openModal.style.display = "none";
   else if (document.body.classList.contains("ashika-mini-pip")) { document.body.classList.remove("ashika-mini-pip"); const mini=document.getElementById("miniPipBtn");if(mini)mini.textContent="MINI / PIP"; }
@@ -1232,18 +1258,16 @@ document.addEventListener("keydown", e => {
   e.preventDefault();
   return;
  }
- // TV remote navigation: spatial D-pad movement (nearest visible control in the pressed direction).
- if (["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(key)) {
+ if (["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(key) || [37,38,39,40].includes(code)) {
+  const direction = key || keyMap[code];
   const active = document.activeElement;
-  // Preserve native cursor movement and option selection while editing or operating a select.
   if (active && (active.matches("input,textarea,select") || active.isContentEditable)) return;
-  const items = [...document.querySelectorAll('button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), .channel[tabindex], .channel')]
+  const items = [...document.querySelectorAll('button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), .channel')]
    .filter(el => el.getClientRects().length && getComputedStyle(el).visibility !== "hidden" && !el.closest("[hidden]"));
   if (!items.length) return;
   if (!items.includes(active)) {
-   const first = items[0];
-   first.focus();
-   first.scrollIntoView({block:"nearest",inline:"nearest"});
+   items[0].focus();
+   items[0].scrollIntoView({block:"nearest",inline:"nearest"});
    e.preventDefault();
    return;
   }
@@ -1252,18 +1276,17 @@ document.addEventListener("keydown", e => {
   const candidates = items.filter(el => el !== active).map(el => {
    const r = el.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
    const dx = x - ax, dy = y - ay;
-   const primary = key === "ArrowRight" ? dx : key === "ArrowLeft" ? -dx : key === "ArrowDown" ? dy : -dy;
-   const secondary = key === "ArrowLeft" || key === "ArrowRight" ? Math.abs(dy) : Math.abs(dx);
-   return {el,primary,secondary,score:primary + secondary * 1.65};
+   const primary = direction === "ArrowRight" ? dx : direction === "ArrowLeft" ? -dx : direction === "ArrowDown" ? dy : -dy;
+   const secondary = direction === "ArrowLeft" || direction === "ArrowRight" ? Math.abs(dy) : Math.abs(dx);
+   return {el,primary,score:primary + secondary * 1.65};
   }).filter(x => x.primary > 2).sort((x,y) => x.score-y.score);
   if (candidates.length) {
-   const next = candidates[0].el;
-   next.focus();
-   next.scrollIntoView({block:"nearest",inline:"nearest"});
+   candidates[0].el.focus();
+   candidates[0].el.scrollIntoView({block:"nearest",inline:"nearest"});
    e.preventDefault();
   }
  }
-});
+}, true);
 
 loadProfileArrays();
 if(localStorage.getItem("ashika_epg_url"))document.getElementById("epgUrl").value=localStorage.getItem("ashika_epg_url");
@@ -1279,6 +1302,11 @@ if (!localStorage.getItem("ashika_seeded")) {
 }
 // Failsafe: remove the splash even if webOS delays the window load event.
 setTimeout(dismissSplash, 1800);
+// Surface startup failures instead of leaving an apparently empty, unresponsive screen.
+window.addEventListener("error", event => {
+ const box = document.getElementById("channels");
+ if (box && !channels.length) box.textContent = "App startup error: " + (event.message || "Unknown error");
+});
 window.addEventListener("load", () => { setAppLanguage(ashikaLanguage); setTimeout(dismissSplash, 500); });
 window.addEventListener("beforeunload", () => { commitWatchTime(); persistProfiles(); });
 </script>
