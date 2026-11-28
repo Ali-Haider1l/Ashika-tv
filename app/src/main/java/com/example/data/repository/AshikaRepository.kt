@@ -63,6 +63,20 @@ class AshikaRepository(
 
     suspend fun ensureInitialized(): Result<Int>? {
         dao.insertProfile(FamilyProfileEntity(PreferencesManager.DEFAULT_PROFILE))
+
+        // Seed Kolkata TV as a built-in HLS channel without overwriting user edits/favorites.
+        val kolkataTvUrl = "https://d35j504z0x2vu2.cloudfront.net/v1/master/0bc8e8376bd8417a1b6761138aa41c26c7309312/kolkata-tv/index.m3u8"
+        if (dao.getChannelsSnapshot().none { it.url.equals(kolkataTvUrl, ignoreCase = true) }) {
+            dao.upsertChannel(
+                ChannelEntity(
+                    url = kolkataTvUrl,
+                    name = "Kolkata TV",
+                    groupTitle = "India News",
+                    source = "built-in"
+                )
+            )
+        }
+
         if (!prefs.hasSeededDefaultPlaylist()) {
             prefs.markDefaultPlaylistSeeded()
             return syncToffeeAndAllChannels()
