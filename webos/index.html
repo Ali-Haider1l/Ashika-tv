@@ -140,7 +140,7 @@ body.ashika-mini-pip #playerBox{position:fixed!important;right:14px;bottom:14px;
       <button class="action" onclick="changeChannel(1)">NEXT ▶</button>
       <button class="action" onclick="toggleChannelList()">CHANNELS</button>
       <button class="action" onclick="fullscreenPlayer()">FULLSCREEN</button>
-      <button class="action" onclick="ashikaToggleMiniPip()">MINI / PIP</button>
+      <button class="action" id="miniPipBtn" onclick="ashikaToggleMiniPip()">MINI / PIP</button>
       <label class="trackControl">SUBTITLES <select id="subtitleSelect" onchange="ashikaSelectSubtitle(this.value)"><option value="-1">Off / Auto</option></select></label>
       <label class="trackControl">AUDIO <select id="audioSelect" onchange="ashikaSelectAudio(this.value)"><option value="-1">Default</option></select></label>
       <button class="action danger" onclick="stopPlayer()">STOP</button>
@@ -502,7 +502,7 @@ function playChannel(c) {
  video.onloadedmetadata=ashikaRefreshTracks;
  const isHls=/\.m3u8(\?|$)/i.test(c.url);
  const nativeHls=isHls&&!hasHeaders&&video.canPlayType("application/vnd.apple.mpegurl")!=="";
- if(isHls&&window.Hls&&(Hls.isSupported()||nativeHls===false)){
+ if(isHls&&window.Hls&&Hls.isSupported()){
   hlsInstance=new Hls({enableWorker:false,lowLatencyMode:false,backBufferLength:30,xhrSetup:(xhr)=>{Object.keys(headers).forEach(k=>{try{xhr.setRequestHeader(k,String(headers[k]));}catch(_){}});}});
   hlsInstance.on(Hls.Events.ERROR,(_event,data)=>{if(data&&data.fatal){document.getElementById("playingName").textContent=c.name+" • HLS "+data.details;if(data.type===Hls.ErrorTypes.NETWORK_ERROR)hlsInstance.startLoad();else if(data.type===Hls.ErrorTypes.MEDIA_ERROR)hlsInstance.recoverMediaError();else{hlsInstance.destroy();hlsInstance=null;}}});
   hlsInstance.on(Hls.Events.MANIFEST_PARSED,()=>video.play().catch(()=>{}));
@@ -956,7 +956,7 @@ async function ashikaSyncPhonePlaylist() {
 function ashikaToggleMiniPip(){
  if(!currentChannelUrl){alert("Play a channel first.");return;}
  document.body.classList.toggle("ashika-mini-pip");
- const b=[...document.querySelectorAll(".playerbar button")].find(x=>x.textContent.includes("MINI")||x.textContent.includes("PIP"));
+ const b=document.getElementById("miniPipBtn");
  if(b)b.textContent=document.body.classList.contains("ashika-mini-pip")?"EXPAND PLAYER":"MINI / PIP";
 }
 function ashikaExportBackup(){
@@ -1029,11 +1029,12 @@ function ashikaOpenUrl(url){window.open(url,"_blank","noopener");}
 function ashikaResetTrackSelectors(){const sub=document.getElementById("subtitleSelect"),aud=document.getElementById("audioSelect");if(sub)sub.innerHTML='<option value="-1">Off / Auto</option>';if(aud)aud.innerHTML='<option value="-1">Default</option>';}
 function ashikaRefreshTracks(){
  const sub=document.getElementById("subtitleSelect"),aud=document.getElementById("audioSelect");if(!sub||!aud)return;ashikaResetTrackSelectors();
- [...videoEl.textTracks].forEach((t,i)=>{const o=document.createElement("option");o.value=String(i);o.textContent=t.label||t.language||("Subtitle "+(i+1));sub.appendChild(o);});
- const tracks=videoEl.audioTracks;if(tracks)for(let i=0;i<tracks.length;i++){const t=tracks[i],o=document.createElement("option");o.value=String(i);o.textContent=t.label||t.language||("Audio "+(i+1));aud.appendChild(o);}
+ [...videoEl.textTracks].forEach((t,i)=>{const o=document.createElement("option");o.value="native:"+i;o.textContent=t.label||t.language||("Subtitle "+(i+1));sub.appendChild(o);});
+ if(hlsInstance){(hlsInstance.subtitleTracks||[]).forEach((t,i)=>{const o=document.createElement("option");o.value="hls:"+i;o.textContent=t.name||t.lang||("HLS Subtitle "+(i+1));sub.appendChild(o);});(hlsInstance.audioTracks||[]).forEach((t,i)=>{const o=document.createElement("option");o.value="hls:"+i;o.textContent=t.name||t.lang||("HLS Audio "+(i+1));aud.appendChild(o);});}
+ const tracks=videoEl.audioTracks;if(tracks)for(let i=0;i<tracks.length;i++){const t=tracks[i],o=document.createElement("option");o.value="native:"+i;o.textContent=t.label||t.language||("Audio "+(i+1));aud.appendChild(o);}
 }
-function ashikaSelectSubtitle(value){const n=Number(value);[...videoEl.textTracks].forEach((t,i)=>t.mode=n===i?"showing":"disabled");}
-function ashikaSelectAudio(value){const n=Number(value),tracks=videoEl.audioTracks;if(!tracks)return;for(let i=0;i<tracks.length;i++)tracks[i].enabled=n<0||n===i;}
+function ashikaSelectSubtitle(value){if(value.startsWith("hls:")&&hlsInstance){hlsInstance.subtitleTrack=Number(value.slice(4));return;}const n=Number(value.replace("native:",""));[...videoEl.textTracks].forEach((t,i)=>t.mode=n===i?"showing":"disabled");if(value==="-1"&&hlsInstance)hlsInstance.subtitleTrack=-1;}
+function ashikaSelectAudio(value){if(value.startsWith("hls:")&&hlsInstance){hlsInstance.audioTrack=Number(value.slice(4));return;}const n=Number(value.replace("native:","")),tracks=videoEl.audioTracks;if(!tracks)return;for(let i=0;i<tracks.length;i++)tracks[i].enabled=n<0||n===i;}
 function ashikaParseXmltv(xml){
  const doc=new DOMParser().parseFromString(xml,"application/xml");if(doc.querySelector("parsererror"))throw new Error("Invalid XMLTV document.");
  const names={};doc.querySelectorAll("channel").forEach(ch=>{const id=ch.getAttribute("id")||"",nm=ch.querySelector("display-name")?.textContent?.trim()||id;if(id)names[id]=nm;});
