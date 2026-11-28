@@ -66,8 +66,8 @@ jobs:
           import re
           canonical = pathlib.Path("ashika_live_tv.html").read_text()
           webos = (root / "index.html").read_text()
-          ids = lambda source: set(re.findall(r"""\\bid=["']([^"']+)["']""", source))
-          funcs = lambda source: set(re.findall(r"function\\s+([A-Za-z_$][\\w$]*)\\s*\\(", source))
+          ids = lambda source: set(re.findall(r"""\bid=["']([^"']+)["']""", source))
+          funcs = lambda source: set(re.findall(r"function\s+([A-Za-z_$][\w$]*)\s*\\(", source))
           missing_ids = ids(canonical) - ids(webos)
           missing_funcs = funcs(canonical) - funcs(webos)
           assert not missing_ids, f"Missing UI elements: {sorted(missing_ids)}"
