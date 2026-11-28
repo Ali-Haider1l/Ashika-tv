@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "webos/**"
+      - "scripts/**"
       - ".github/workflows/webos-ipk.yml"
   pull_request:
     paths:
@@ -162,11 +163,16 @@ jobs:
           print("Validated:", info["id"], info["version"])
           PY
 
+      - name: Transpile inline JavaScript for LG webOS Chromium 53
+        run: |
+          npm install --no-save --no-package-lock --no-audit --no-fund @babel/core@7 @babel/preset-env@7
+          node scripts/transpile-webos.js
+
       - name: Package IPK
         run: |
           mkdir -p dist
           ares-config --profile tv
-          ares-package --no-minify --outdir dist webos-build
+          ares-package --no-minify --outdir dist webos-build-build
           test -s dist/com.ashika.livetv_9.4.6_all.ipk
           ares-package --info dist/com.ashika.livetv_9.4.6_all.ipk
 
