@@ -168,19 +168,46 @@ jobs:
           npm install --no-save --no-package-lock --no-audit --no-fund @babel/core@7 @babel/preset-env@7
           node scripts/transpile-webos.js
 
+      - name: Validate transpiled webOS runtime
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const vm = require('vm');
+          const html = fs.readFileSync('webos-build/index.html', 'utf8');
+          const info = JSON.parse(fs.readFileSync('webos-build/appinfo.json', 'utf8'));
+          if (info.version !== '9.5.1') throw new Error('App metadata version mismatch');
+          if (html.includes('.matchAll(')) throw new Error('Unsupported String.matchAll remains in webOS bundle');
+          for (const fn of ['ashikaAddPlaylist','loadPlaylist','renderPlaylistManager','ashikaRestoreInternalChannels','ashikaExtractToffeeHtml']) {
+            if (!html.includes('function ' + fn + '(')) throw new Error('Missing runtime function: ' + fn);
+          }
+          const re = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi;
+          let match, checked = 0;
+          while ((match = re.exec(html)) !== null) {
+            const attrs = match[1], code = match[2];
+            if (!code.trim() || /\bsrc\s*=/.test(attrs) || /application\/(?:json|importmap)/i.test(attrs)) continue;
+            new vm.Script(code, { filename: 'webos-inline-' + checked + '.js' }); checked++;
+          }
+          const defaults = (html.match(/source:\s*["']built-in["']/g) || []).length;
+          if (defaults < 14) throw new Error('Expected 14 built-in channels; found ' + defaults);
+          for (const marker of ['Add &amp; Save More Playlists','Saved Playlists','Import Playlist File','Kolkata TV','Zee Bangla HD']) {
+            if (!html.includes(marker)) throw new Error('Missing packaged feature/content: ' + marker);
+          }
+          console.log('Transpiled runtime validated:', checked, 'inline scripts;', defaults, 'built-in channel entries.');
+          NODE
+
       - name: Package IPK
         run: |
           mkdir -p dist
           ares-config --profile tv
           ares-package --no-minify --outdir dist webos-build
-          test -s dist/com.ashika.livetv_9.5.0_all.ipk
-          ares-package --info dist/com.ashika.livetv_9.5.0_all.ipk
+          test -s dist/com.ashika.livetv_9.5.1_all.ipk
+          ares-package --info dist/com.ashika.livetv_9.5.1_all.ipk
 
       - name: Verify packaged IPK contents
         run: |
           python - <<'PY'
           import io, pathlib, subprocess, tarfile
-          package = pathlib.Path("dist/com.ashika.livetv_9.5.0_all.ipk")
+          package = pathlib.Path("dist/com.ashika.livetv_9.5.1_all.ipk")
           members = subprocess.check_output(["ar", "t", str(package)], text=True).splitlines()
           data_name = next((name for name in members if name.startswith("data.tar")), None)
           assert data_name, f"No application payload found in IPK: {members}"
@@ -197,7 +224,7 @@ jobs:
       - name: Upload IPK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Ashika-TV-webOS-IPK-v9.5.0
+          name: Ashika-TV-webOS-IPK-v9.5.1
           path: dist/*.ipk
           retention-days: 90
 
@@ -205,8 +232,8 @@ jobs:
         if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: webos-v9.5.0
+          tag_name: webos-v9.5.1
           target_commitish: main
-          name: Ashika TV webOS v9.5.0
+          name: Ashika TV webOS v9.5.1
           generate_release_notes: true
           files: dist/*.ipk
