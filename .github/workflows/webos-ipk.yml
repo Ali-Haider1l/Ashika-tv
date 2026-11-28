@@ -82,7 +82,22 @@ jobs:
           for fn in ("ashikaLoadEpg", "ashikaParseXmltv", "ashikaSelectSubtitle", "ashikaSelectAudio"):
               assert ("function " + fn + "(") in webos, f"Missing feature function: {fn}"
           assert "video.canPlayType" in webos, "Native HLS-first playback fallback is missing"
-          print(f"Parity check passed: {len(ids(canonical))} baseline UI IDs, {len(funcs(canonical))} baseline functions; webOS EPG/sports/tracks/HLS checks passed")
+          required_features = ["epgPanel", "sportsPanel", "toffeePanel", "subtitleSelect", "audioSelect", "miniPipBtn", "backupFile"]
+          for feature in required_features:
+              assert feature in webos, f"Missing webOS feature: {feature}"
+          for fn in ("ashikaLoadEpg", "ashikaParseXmltv", "ashikaSelectSubtitle", "ashikaSelectAudio", "ashikaToggleMiniPip", "ashikaExportBackup", "ashikaImportBackup", "ashikaExtractToffeeInput", "ashikaFetchToffee", "ashikaParseJsonPlaylist", "ashikaParseHeaderQuery"):
+              assert ("function " + fn + "(") in webos, f"Missing feature function: {fn}"
+          assert "video.canPlayType" in webos and "xhr.setRequestHeader" in webos, "Native HLS / header-aware HLS playback is missing"
+          # Parse every inline JavaScript block to catch syntax errors before packaging.
+          import subprocess, tempfile
+          scripts = re.findall(r"<script\b(?![^>]*\bsrc=)[^>]*>([\s\S]*?)</script>", webos, re.I)
+          for index, script in enumerate(scripts):
+              if not script.strip():
+                  continue
+              js_file = pathlib.Path(tempfile.gettempdir()) / f"ashika-webos-{index}.js"
+              js_file.write_text(script)
+              subprocess.run(["node", "--check", str(js_file)], check=True)
+          print(f"Parity checks passed: {len(ids(canonical))} baseline UI IDs, {len(funcs(canonical))} baseline functions, {len(scripts)} inline JS blocks syntax-checked; webOS EPG/sports/Toffee/backup/PiP/header-HLS checks passed")
           print("Validated:", info["id"], info["version"])
           PY
 
@@ -91,14 +106,14 @@ jobs:
           mkdir -p dist
           ares-config --profile tv
           ares-package --no-minify --outdir dist webos
-          test -s dist/com.ashika.livetv_9.1.0_all.ipk
-          ares-package --info dist/com.ashika.livetv_9.1.0_all.ipk
+          test -s dist/com.ashika.livetv_9.2.0_all.ipk
+          ares-package --info dist/com.ashika.livetv_9.2.0_all.ipk
 
       - name: Verify packaged IPK contents
         run: |
           python - <<'PY'
           import io, pathlib, subprocess, tarfile
-          package = pathlib.Path("dist/com.ashika.livetv_9.1.0_all.ipk")
+          package = pathlib.Path("dist/com.ashika.livetv_9.2.0_all.ipk")
           members = subprocess.check_output(["ar", "t", str(package)], text=True).splitlines()
           data_name = next((name for name in members if name.startswith("data.tar")), None)
           assert data_name, f"No application payload found in IPK: {members}"
@@ -115,7 +130,7 @@ jobs:
       - name: Upload IPK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Ashika-TV-webOS-IPK-v9.1.0
+          name: Ashika-TV-webOS-IPK-v9.2.0
           path: dist/*.ipk
           retention-days: 90
 
@@ -123,8 +138,8 @@ jobs:
         if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: webos-v9.1.0
+          tag_name: webos-v9.2.0
           target_commitish: main
-          name: Ashika TV webOS v9.1.0
+          name: Ashika TV webOS v9.2.0
           generate_release_notes: true
           files: dist/*.ipk
