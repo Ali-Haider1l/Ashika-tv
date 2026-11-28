@@ -93,6 +93,7 @@ jobs:
           for fn in ("ashikaSaveRelaySettings", "ashikaTestRelay", "ashikaBuildRelayUrl"):
               assert ("function " + fn + "(") in webos, f"Missing relay integration: {fn}"
           assert "playbackUrl" in webos and "Buffered Ahead" in webos, "Relay playback / expanded diagnostics are missing"
+          import subprocess
           subprocess.run(["node", "--check", "relay/api/relay.js"], check=True)
           json.loads(pathlib.Path("relay/package.json").read_text())
           json.loads(pathlib.Path("relay/vercel.json").read_text())
