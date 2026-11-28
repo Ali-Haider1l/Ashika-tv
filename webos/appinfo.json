@@ -1,6 +1,6 @@
 {
   "id": "com.ashika.livetv",
-  "version": "9.4.5",
+  "version": "9.4.6",
   "vendor": "Ashika",
   "type": "web",
   "main": "index.html",
@@ -10,4 +10,4 @@
   "resolution": "1920x1080",
   "supportPortraitMode": false,
   "disableBackHistoryAPI": true
-}
+}\n
