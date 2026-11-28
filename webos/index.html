@@ -540,6 +540,8 @@ function toggleChannelList() {
  document.getElementById("playerLayout").classList.toggle("channels-hidden");
 }
 function stopPlayer() {
+ document.body.classList.remove("ashika-mini-pip");
+ const mini=document.getElementById("miniPipBtn");if(mini)mini.textContent="MINI / PIP";
  commitWatchTime();
  if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
  const p = document.getElementById("player");
@@ -1073,6 +1075,7 @@ document.addEventListener("keydown", e => {
  if (key === "Escape" || key === "Back" || e.keyCode === 461) {
   const openModal = [...document.querySelectorAll(".modal")].find(m => getComputedStyle(m).display !== "none");
   if (openModal) openModal.style.display = "none";
+  else if (document.body.classList.contains("ashika-mini-pip")) { document.body.classList.remove("ashika-mini-pip"); const mini=document.getElementById("miniPipBtn");if(mini)mini.textContent="MINI / PIP"; }
   else if (document.getElementById("playerBox").style.display !== "none") stopPlayer();
   else closeMenuMobile();
   e.preventDefault();
