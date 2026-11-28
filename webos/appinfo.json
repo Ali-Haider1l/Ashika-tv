@@ -1,12 +1,12 @@
 {
   "id": "com.ashika.livetv",
-  "version": "9.5.1",
+  "version": "9.5.2",
   "vendor": "Ashika",
   "type": "web",
   "main": "index.html",
   "title": "Ashika Live TV",
   "icon": "icon.png",
-  "largeIcon": "icon.png",
+  "largeIcon": "largeicon.png",
   "resolution": "1920x1080",
   "supportPortraitMode": false,
   "disableBackHistoryAPI": true
