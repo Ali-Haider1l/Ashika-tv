@@ -173,14 +173,14 @@ jobs:
           mkdir -p dist
           ares-config --profile tv
           ares-package --no-minify --outdir dist webos-build
-          test -s dist/com.ashika.livetv_9.4.8_all.ipk
-          ares-package --info dist/com.ashika.livetv_9.4.8_all.ipk
+          test -s dist/com.ashika.livetv_9.4.9_all.ipk
+          ares-package --info dist/com.ashika.livetv_9.4.9_all.ipk
 
       - name: Verify packaged IPK contents
         run: |
           python - <<'PY'
           import io, pathlib, subprocess, tarfile
-          package = pathlib.Path("dist/com.ashika.livetv_9.4.8_all.ipk")
+          package = pathlib.Path("dist/com.ashika.livetv_9.4.9_all.ipk")
           members = subprocess.check_output(["ar", "t", str(package)], text=True).splitlines()
           data_name = next((name for name in members if name.startswith("data.tar")), None)
           assert data_name, f"No application payload found in IPK: {members}"
@@ -197,7 +197,7 @@ jobs:
       - name: Upload IPK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Ashika-TV-webOS-IPK-v9.4.8
+          name: Ashika-TV-webOS-IPK-v9.4.9
           path: dist/*.ipk
           retention-days: 90
 
@@ -205,8 +205,8 @@ jobs:
         if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: webos-v9.4.8
+          tag_name: webos-v9.4.9
           target_commitish: main
-          name: Ashika TV webOS v9.4.8
+          name: Ashika TV webOS v9.4.9
           generate_release_notes: true
           files: dist/*.ipk
