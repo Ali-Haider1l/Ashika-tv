@@ -1213,6 +1213,16 @@ function dismissSplash() {
 
 document.addEventListener("keydown", e => {
  const key = e.key || "";
+ // LG remotes can report the OK button as Enter, Select, or keyCode 23/66.
+ if (key === "Enter" || key === "Select" || key === "OK" || e.keyCode === 23 || e.keyCode === 66) {
+  const active = document.activeElement;
+  if (active && active.matches("button:not([disabled]), input[type=button], input[type=submit], .channel[tabindex]")) {
+   e.preventDefault();
+   e.stopPropagation();
+   active.click();
+   return;
+  }
+ }
  if (key === "Escape" || key === "Back" || e.keyCode === 461) {
   const openModal = [...document.querySelectorAll(".modal")].find(m => getComputedStyle(m).display !== "none");
   if (openModal) openModal.style.display = "none";
@@ -1267,7 +1277,9 @@ if (!localStorage.getItem("ashika_seeded")) {
  // Avoid auto-fetching third-party playlists on LG webOS startup because many block CORS.
  // The default source remains saved for manual loading in Playlist Settings.
 }
-window.addEventListener("load", () => { setAppLanguage(ashikaLanguage); setTimeout(dismissSplash, 1100); });
+// Failsafe: remove the splash even if webOS delays the window load event.
+setTimeout(dismissSplash, 1800);
+window.addEventListener("load", () => { setAppLanguage(ashikaLanguage); setTimeout(dismissSplash, 500); });
 window.addEventListener("beforeunload", () => { commitWatchTime(); persistProfiles(); });
 </script>
 </body>
