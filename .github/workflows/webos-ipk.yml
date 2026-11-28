@@ -132,7 +132,7 @@ jobs:
               "backupFile", "relayEndpoint"
           ]
           for element_id in webos_parity_ids:
-              assert re.search(r"\bid=[\"']" + re.escape(element_id) + r"[\\\"']", webos), f"Android parity UI missing in webOS: {element_id}"
+              assert re.search(r"\bid=[\"']" + re.escape(element_id) + r"[\"']", webos), f"Android parity UI missing in webOS: {element_id}"
           webos_parity_functions = [
               "openChannelPreview", "setAppLanguage", "ashikaDeleteProfile", "ashikaLoadEpg",
               "ashikaImportEpg", "ashikaExportBackup", "ashikaImportBackup", "ashikaToggleMiniPip",
