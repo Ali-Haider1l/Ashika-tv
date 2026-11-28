@@ -183,6 +183,9 @@ jobs:
           const info = JSON.parse(fs.readFileSync('webos-build/appinfo.json', 'utf8'));
           if (info.version !== '9.5.2') throw new Error('App metadata version mismatch');
           if (html.includes('.matchAll(')) throw new Error('Unsupported String.matchAll remains in webOS bundle');
+          for (const api of ['.append(', '.padStart(', 'Object.entries(']) {
+            if (html.includes(api)) throw new Error('Post-Chromium 53 API remains in webOS bundle: ' + api);
+          }
           for (const fn of ['ashikaAddPlaylist','loadPlaylist','renderPlaylistManager','ashikaRestoreInternalChannels','ashikaExtractToffeeHtml']) {
             if (!html.includes('function ' + fn + '(')) throw new Error('Missing runtime function: ' + fn);
           }
