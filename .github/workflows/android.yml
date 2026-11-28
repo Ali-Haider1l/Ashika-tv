@@ -40,7 +40,19 @@ jobs:
         run: gradle --no-daemon assembleDebug
 
       - name: Run unit tests
-        run: gradle --no-daemon testDebugUnitTest
+        run: |
+          for attempt in 1 2 3; do
+            echo "Running unit tests (attempt $attempt/3)"
+            if gradle --no-daemon testDebugUnitTest; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              echo "Unit tests failed; retrying in 15 seconds (Robolectric may need to fetch Android artifacts)."
+              sleep 15
+            fi
+          done
+          echo "Unit tests failed after 3 attempts."
+          exit 1
 
       - name: Upload APK
         if: always()
