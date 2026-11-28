@@ -6,6 +6,10 @@ on:
     paths:
       - "webos/**"
       - ".github/workflows/webos-ipk.yml"
+  pull_request:
+    paths:
+      - "webos/**"
+      - ".github/workflows/webos-ipk.yml"
   workflow_dispatch:
 
 permissions:
@@ -116,6 +120,7 @@ jobs:
           retention-days: 90
 
       - name: Publish webOS IPK release
+        if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: webos-v9.1.0
