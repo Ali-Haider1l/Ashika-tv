@@ -189,7 +189,7 @@ jobs:
           }
           const defaults = (html.match(/source:\s*["']built-in["']/g) || []).length;
           if (defaults < 14) throw new Error('Expected 14 built-in channels; found ' + defaults);
-          for (const marker of ['Add &amp; Save More Playlists','Saved Playlists','Import Playlist File','Kolkata TV','Zee Bangla HD']) {
+          for (const marker of ['Add &amp; Save More Playlists','Saved Playlists','Upload M3U File','Kolkata TV','Zee Bangla HD']) {
             if (!html.includes(marker)) throw new Error('Missing packaged feature/content: ' + marker);
           }
           console.log('Transpiled runtime validated:', checked, 'inline scripts;', defaults, 'built-in channel entries.');
