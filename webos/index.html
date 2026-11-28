@@ -548,7 +548,7 @@ function fullscreenPlayer() {
 function parseM3uText(text, source = "playlist") {
  const lines = String(text || "").split(/\r?\n/);
  const out = [];
- let name = "", group = "Other", logo = "";
+ let name = "", group = "Other", logo = "", tvgId = "";
  for (let raw of lines) {
   const line = raw.trim();
   if (!line) continue;
@@ -747,6 +747,7 @@ function ashikaOpenFeature(id) {
  if (id === "familyPanel") ashikaRenderProfiles();
  if (id === "statsPanel") ashikaRenderStats();
  if (id === "matchPanel") ashikaRenderMatches();
+ if (id === "epgPanel") ashikaRenderEpg();
 }
 function ashikaCloseFeatures() {
  document.querySelectorAll(".featurePanel").forEach(p => p.style.display = "none");
