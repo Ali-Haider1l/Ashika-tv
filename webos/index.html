@@ -414,9 +414,22 @@ body.ashika-mini-pip #playerBox{position:fixed!important;right:14px;bottom:14px;
 </div>
 
 <script>
-const DEFAULT_PLAYLIST = "https://github.com/abusaeeidx/Mrgify-BDIX-IPTV/raw/main/playlist.m3u";
+const DEFAULT_PLAYLIST = "https://raw.githubusercontent.com/abusaeeidx/Mrgify-BDIX-IPTV/main/Channels_data.json";
+const DEFAULT_PLAYLIST_FALLBACKS = ["https://cdn.jsdelivr.net/gh/abusaeeidx/Mrgify-BDIX-IPTV@main/Channels_data.json","https://raw.githubusercontent.com/abusaeeidx/Mrgify-BDIX-IPTV/main/playlist.m3u","https://cdn.jsdelivr.net/gh/abusaeeidx/Mrgify-BDIX-IPTV@main/playlist.m3u"];
 const DEFAULT_RELAY_ENDPOINT = "https://ashika-tv-relay.vercel.app/api/relay";
 const KOLKATA_TV = { name: "Kolkata TV", group: "India News", logo: "", url: "https://d35j504z0x2vu2.cloudfront.net/v1/master/0bc8e8376bd8417a1b6761138aa41c26c7309312/kolkata-tv/index.m3u8", source: "built-in" };
+const DEFAULT_CHANNELS = [
+ {name:"Deshi TV",group:"Bangladesh",logo:"",url:"https://deshitv.deshitv24.net/live/myStream/playlist.m3u8",source:"built-in"},
+ {name:"RTV",group:"Bangladesh",logo:"",url:"https://tvsen5.aynaott.com/RtvHD/index.m3u8",source:"built-in"},
+ {name:"Maasranga TV",group:"Bangladesh",logo:"",url:"https://tvsen5.aynaott.com/maasrangatv/index.m3u8",source:"built-in"},
+ {name:"Duronto TV",group:"Bangladesh",logo:"",url:"https://tvsen6.aynaott.com/6xyZ3N4oHv2KBJdB6W4p/index.m3u8",source:"built-in"},
+ {name:"NTV",group:"Bangladesh",logo:"",url:"https://tvsen5.aynaott.com/xV4jEKf3D9zc/index.m3u8",source:"built-in"},
+ {name:"Ekushey TV",group:"Bangladesh",logo:"",url:"https://ekusheyserver.com/etvlivesn.m3u8",source:"built-in"},
+ {name:"ATN News",group:"Bangladesh News",logo:"",url:"https://tvsen6.aynaott.com/da6WMXAk/index.m3u8",source:"built-in"},
+ {name:"Boishakhi TV",group:"Bangladesh",logo:"",url:"https://tvsen6.aynaott.com/1d3uG9VCgrR9DRtWZM57/index.m3u8",source:"built-in"},
+ {name:"Channel I",group:"Bangladesh",logo:"",url:"https://tvsen6.aynaott.com/FNHpYvGZ7FkCE10PwTHm/index.m3u8",source:"built-in"},
+ {name:"DW News",group:"International News",logo:"",url:"https://dwamdstream102.akamaized.net/hls/live/2015525/dwstream102/master.m3u8",source:"built-in"}
+];
 // webOS storage can contain stale or partially written JSON after an app update.
 // Validate persisted values before using them so one bad record cannot stop the whole UI.
 function ashikaReadJson(key, fallback) {
@@ -428,12 +441,12 @@ function ashikaReadString(key, fallback) {
  catch (_) { return fallback; }
 }
 const storedChannels = ashikaReadJson("ashika_channels", []);
-let channels = (Array.isArray(storedChannels) ? storedChannels : [])
- .filter(c => c && typeof c === "object" && typeof c.name === "string" && isValidHttpUrl(c.url));
-if (!channels.some(c => c.url === KOLKATA_TV.url)) {
- channels.unshift(KOLKATA_TV);
- try { localStorage.setItem("ashika_channels", JSON.stringify(channels)); } catch (_) {}
-}
+const initialChannelMap = new Map();
+[...DEFAULT_CHANNELS, KOLKATA_TV, ...(Array.isArray(storedChannels) ? storedChannels : [])].forEach(c => {
+ if (c && typeof c === "object" && typeof c.name === "string" && c.name.trim() && isValidHttpUrl(c.url)) initialChannelMap.set(c.url, c);
+});
+let channels = Array.from(initialChannelMap.values());
+try { localStorage.setItem("ashika_channels", JSON.stringify(channels)); } catch (_) {}
 const storedPlaylists = ashikaReadJson("ashika_playlists", []);
 let savedPlaylists = (Array.isArray(storedPlaylists) ? storedPlaylists : []).filter(isValidHttpUrl);
 let profiles = ashikaReadJson("ashika_profiles", null);
@@ -828,31 +841,36 @@ function openSettings() {
 function closeSettings() { document.getElementById("settingsModal").style.display = "none"; }
 
 async function loadPlaylist(urlOverride) {
- const url=(urlOverride||document.getElementById("playlistUrl").value).trim(),status=document.getElementById("status");
+ const url=(urlOverride||document.getElementById("playlistUrl").value||DEFAULT_PLAYLIST).trim(),status=document.getElementById("status");
  if(!isValidHttpUrl(url)){status.textContent="Enter a valid HTTP/HTTPS playlist URL.";return;}
- status.textContent="Connecting to playlist…";
- let lastError=null,parsed=[];
- for(let attempt=1;attempt<=3;attempt++){
-  try{
-   const controller=typeof AbortController!=="undefined"?new AbortController():null;
-   const timeout=controller?setTimeout(()=>controller.abort(),18000):null;
-   const requestUrl=url+(url.includes("?")?"&":"?")+"ashika_refresh="+Date.now();
-   let res;
-   try{res=await fetch(requestUrl,{method:"GET",cache:"no-store",mode:"cors",credentials:"omit",signal:controller?controller.signal:undefined,headers:{"Accept":"application/x-mpegURL, application/vnd.apple.mpegurl, text/plain, application/json, */*"}});}
-   finally{if(timeout)clearTimeout(timeout);}
-   if(!res.ok)throw new Error("HTTP "+res.status);
-   const body=await res.text();
-   if(!body||body.trim().length<8)throw new Error("Playlist response is empty");
-   if(/^\s*(<!doctype html|<html)/i.test(body))throw new Error("Server returned a web page, not an M3U/JSON playlist");
-   parsed=parseM3uText(body,"playlist");
-   if(!parsed.length)throw new Error("No valid HTTP stream URLs found");
-   break;
-  }catch(e){lastError=e;status.textContent="Playlist loading… retry "+attempt+"/3";if(attempt<3)await new Promise(resolve=>setTimeout(resolve,650*attempt));}
+ status.textContent="Loading playlist…";
+ const candidates=[url];
+ if(url===DEFAULT_PLAYLIST)DEFAULT_PLAYLIST_FALLBACKS.forEach(x=>{if(!candidates.includes(x))candidates.push(x);});
+ let parsed=[],lastError=null,loadedFrom=url;
+ for(const candidate of candidates){
+  for(let attempt=1;attempt<=2;attempt++){
+   try{
+    const controller=typeof AbortController!=="undefined"?new AbortController():null;
+    const timeout=controller?setTimeout(()=>controller.abort(),15000):null;
+    let res;
+    try{res=await fetch(candidate,{method:"GET",cache:"no-store",mode:"cors",credentials:"omit",signal:controller?controller.signal:undefined,headers:{"Accept":"application/json, application/x-mpegURL, application/vnd.apple.mpegurl, text/plain, */*"}});}
+    finally{if(timeout)clearTimeout(timeout);}
+    if(!res.ok)throw new Error("HTTP "+res.status);
+    const body=await res.text();
+    if(!body||body.trim().length<8)throw new Error("Empty playlist response");
+    if(/^\\s*(<!doctype html|<html)/i.test(body))throw new Error("Server returned HTML, not a playlist");
+    parsed=parseM3uText(body,"playlist");
+    if(!parsed.length)throw new Error("Playlist contains no valid HTTP stream URLs");
+    loadedFrom=candidate;
+    break;
+   }catch(e){lastError=e;if(attempt<2)await new Promise(resolve=>setTimeout(resolve,500));}
+  }
+  if(parsed.length)break;
  }
- if(!parsed.length){status.textContent="Could not load playlist: "+(lastError&&lastError.name==="AbortError"?"Connection timed out":lastError?lastError.message:"Unknown error")+". Check URL and server CORS access.";return;}
+ if(!parsed.length){status.textContent="Playlist could not load. Built-in channels are available. Last error: "+(lastError&&lastError.name==="AbortError"?"timeout":lastError?lastError.message:"unknown error");render();return;}
  mergeChannels(parsed);
- if(!savedPlaylists.includes(url)){savedPlaylists.push(url);localStorage.setItem("ashika_playlists",JSON.stringify(savedPlaylists));}
- document.getElementById("status").textContent=parsed.length+" channels loaded successfully.";
+ if(!savedPlaylists.includes(url)){savedPlaylists.push(url);try{localStorage.setItem("ashika_playlists",JSON.stringify(savedPlaylists));}catch(_){}}
+ status.textContent=parsed.length+" playlist channels loaded. Total: "+channels.length+(loadedFrom!==url?" (backup source)":"");
  const autoEpg=localStorage.getItem("ashika_playlist_epg_url");if(autoEpg){document.getElementById("epgUrl").value=autoEpg;ashikaLoadEpg();}
  renderPlaylistManager();renderPlayerChannels();render();
 }
@@ -1382,6 +1400,7 @@ document.addEventListener("keydown", e => {
  }
 }, true);
 
+page="all"; category="All";
 loadProfileArrays();
 ashikaSetHero(0);
 if(localStorage.getItem("ashika_epg_url"))document.getElementById("epgUrl").value=localStorage.getItem("ashika_epg_url");
