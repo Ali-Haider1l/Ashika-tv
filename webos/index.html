@@ -268,7 +268,7 @@ body.ashika-mini-pip #playerBox{position:fixed!important;right:14px;bottom:14px;
 
   <div class="adminItem" style="margin-top:12px">
    <span><strong>Upload M3U File</strong></span>
-   <input type="file" id="playlistFile" accept=".m3u,.m3u8,audio/x-mpegurl,application/vnd.apple.mpegurl" onchange="uploadPlaylistFile(event)">
+   <input type="file" id="playlistFile" accept=".m3u,.m3u8,.json,audio/x-mpegurl,application/vnd.apple.mpegurl,application/json" onchange="uploadPlaylistFile(event)">
   </div>
 
   <h4 style="margin:14px 0 6px">Phone-to-TV Companion Sync (Optional)</h4>
@@ -1043,9 +1043,16 @@ function ashikaParseXmltv(xml){
  const programs=[];doc.querySelectorAll("programme").forEach(p=>{const start=ashikaXmltvDate(p.getAttribute("start")),stop=ashikaXmltvDate(p.getAttribute("stop")),channel=p.getAttribute("channel")||"",title=p.querySelector("title")?.textContent?.trim()||"Programme",desc=p.querySelector("desc")?.textContent?.trim()||"";if(start&&stop&&channel)programs.push({channel,channelName:names[channel]||channel,title,desc,start,stop});});return {channels:names,programs};
 }
 function ashikaXmltvDate(raw){if(!raw)return 0;const m=raw.match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})?\s*([+-]\d{4}|Z)?/);if(!m)return 0;const iso=m[1]+"-"+m[2]+"-"+m[3]+"T"+m[4]+":"+m[5]+":"+(m[6]||"00")+(m[7]&&m[7]!=="Z"?m[7].slice(0,3)+":"+m[7].slice(3):"Z");const n=Date.parse(iso);return Number.isFinite(n)?n:0;}
+async async function ashikaReadEpgText(res,url){
+ const compressed=/\\.gz(?:$|\\?)/i.test(url)||/gzip/i.test(res.headers.get("content-encoding")||"")||/gzip/i.test(res.headers.get("content-type")||"");
+ if(!compressed)return await res.text();
+ if(typeof DecompressionStream==="undefined")throw new Error("This LG webOS browser cannot decompress .gz EPG. Import an uncompressed .xml file instead.");
+ const stream=new Blob([await res.arrayBuffer()]).stream().pipeThrough(new DecompressionStream("gzip"));
+ return await new Response(stream).text();
+}
 async function ashikaLoadEpg(){
  const url=document.getElementById("epgUrl").value.trim(),status=document.getElementById("epgStatus");if(!isValidHttpUrl(url)){status.textContent="Enter a valid XMLTV HTTP/HTTPS URL.";return;}status.textContent="Loading XMLTV guide...";
- try{const res=await fetch(url);if(!res.ok)throw new Error("HTTP "+res.status);const data=ashikaParseXmltv(await res.text());epgData=data.programs;epgChannelNames=data.channels;localStorage.setItem("ashika_epg_data",JSON.stringify(epgData));localStorage.setItem("ashika_epg_channels",JSON.stringify(epgChannelNames));localStorage.setItem("ashika_epg_url",url);status.textContent="Loaded "+epgData.length+" programmes for "+Object.keys(epgChannelNames).length+" channels.";ashikaRenderEpg();}catch(e){status.textContent="EPG load failed: "+e.message+" (Some providers block CORS from TV browsers.)";}
+ try{const res=await fetch(url);if(!res.ok)throw new Error("HTTP "+res.status);const data=ashikaParseXmltv(await ashikaReadEpgText(res,url));epgData=data.programs;epgChannelNames=data.channels;localStorage.setItem("ashika_epg_data",JSON.stringify(epgData));localStorage.setItem("ashika_epg_channels",JSON.stringify(epgChannelNames));localStorage.setItem("ashika_epg_url",url);status.textContent="Loaded "+epgData.length+" programmes for "+Object.keys(epgChannelNames).length+" channels.";ashikaRenderEpg();}catch(e){status.textContent="EPG load failed: "+e.message+" (Some providers block CORS from TV browsers.)";}
 }
 function ashikaImportEpg(event){const file=event.target.files&&event.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=()=>{try{const d=ashikaParseXmltv(String(reader.result));epgData=d.programs;epgChannelNames=d.channels;localStorage.setItem("ashika_epg_data",JSON.stringify(epgData));localStorage.setItem("ashika_epg_channels",JSON.stringify(epgChannelNames));document.getElementById("epgStatus").textContent="Imported "+epgData.length+" programmes.";ashikaRenderEpg();}catch(e){document.getElementById("epgStatus").textContent="Import failed: "+e.message;}};reader.readAsText(file);event.target.value="";}
 function ashikaRenderEpg(){
@@ -1055,7 +1062,7 @@ function ashikaRenderEpg(){
 function ashikaClearEpg(){epgData=[];epgChannelNames={};localStorage.removeItem("ashika_epg_data");localStorage.removeItem("ashika_epg_channels");ashikaRenderEpg();}
 
 function openToffee() { window.open("https://toffeelive.com", "_blank", "noopener"); }
-function showAbout() { alert("Ashika Live TV v9.1.0\nFree and authorized M3U / HLS streams only."); }
+function showAbout() { alert("Ashika Live TV v9.2.0\nFree and authorized M3U / HLS streams only."); }
 function dismissSplash() {
  const s = document.getElementById("ashikaSplash");
  if (s) { s.style.opacity = "0"; setTimeout(() => s.remove(), 400); }
