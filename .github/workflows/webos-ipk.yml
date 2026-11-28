@@ -172,7 +172,7 @@ jobs:
         run: |
           mkdir -p dist
           ares-config --profile tv
-          ares-package --no-minify --outdir dist webos-build-build
+          ares-package --no-minify --outdir dist webos-build
           test -s dist/com.ashika.livetv_9.4.6_all.ipk
           ares-package --info dist/com.ashika.livetv_9.4.6_all.ipk
 
