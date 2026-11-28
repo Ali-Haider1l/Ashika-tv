@@ -1330,8 +1330,9 @@ function ashikaWalkToffee(node,out,meta,inherited){
 }
 function ashikaExtractToffeeHtml(source){
  const out=new Map(),meta={},text=String(source||"");
- const scripts=[...text.matchAll(/<script[^>]*(?:id=["']__NEXT_DATA__["']|type=["']application\/(?:ld\+)?json["'])[^>]*>([\s\S]*?)<\/script>/gi)];
- scripts.forEach(m=>{try{ashikaWalkToffee(JSON.parse(m[1]),out,meta,"");}catch(_){}});
+ const scriptPattern=/<script[^>]*(?:id=["']__NEXT_DATA__["']|type=["']application\/(?:ld\+)?json["'])[^>]*>([\s\S]*?)<\/script>/gi;
+ let scriptMatch;
+ while((scriptMatch=scriptPattern.exec(text))!==null){try{ashikaWalkToffee(JSON.parse(scriptMatch[1]),out,meta,"");}catch(_){}}
  const urls=text.match(/https?:\\?\/\\?\/[^\s"'<>\\]+\.m3u8(?:\?[^\s"'<>\\]*)?/gi)||[];
  urls.forEach(raw=>{const url=raw.replace(/\\\//g,"/").replace(/[),;]+$/,"");if(isValidHttpUrl(url)&&!out.has(url)){const name=url.split("?")[0].split("/").pop().replace(/\.m3u8.*$/i,"").replace(/[-_]/g," ")||"Toffee Channel";out.set(url,{name,group:"Toffee Live",logo:"",url,source:"toffee",headers:{Referer:"https://toffeelive.com/",Origin:"https://toffeelive.com"}});}});
  return {channels:[...out.values()],metadata:meta};
@@ -1390,7 +1391,7 @@ function ashikaRenderEpg(){
 function ashikaClearEpg(){epgData=[];epgChannelNames={};localStorage.removeItem("ashika_epg_data");localStorage.removeItem("ashika_epg_channels");ashikaRenderEpg();}
 
 function openToffee() { window.open("https://toffeelive.com", "_blank", "noopener"); }
-function showAbout() { alert("Ashika Live TV v9.4.7\nFree and authorized M3U / HLS streams only."); }
+function showAbout() { alert("Ashika Live TV v9.5.1\nFree and authorized M3U / HLS streams only."); }
 function dismissSplash() {
  const s = document.getElementById("ashikaSplash");
  if (s) { s.style.opacity = "0"; setTimeout(() => s.remove(), 400); }
