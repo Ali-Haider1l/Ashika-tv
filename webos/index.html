@@ -496,11 +496,11 @@ function render() {
 }
 
 function ashikaGetRelayConfig(){
- return {endpoint:(localStorage.getItem("ashika_relay_endpoint")||"").trim().replace(/\\/$/,""),key:localStorage.getItem("ashika_relay_key")||""};
+ return {endpoint:(localStorage.getItem("ashika_relay_endpoint")||"").trim().replace(/\/$/,""),key:localStorage.getItem("ashika_relay_key")||""};
 }
 function ashikaSaveRelaySettings(){
- const endpoint=document.getElementById("relayEndpoint").value.trim().replace(/\\/$/,""),key=document.getElementById("relayKey").value.trim(),status=document.getElementById("relayStatus");
- if(!endpoint||!/^https:\\/\\//i.test(endpoint)||!endpoint.endsWith("/api/relay")||!key){status.textContent="Enter an HTTPS Vercel endpoint ending in /api/relay and its relay key.";return;}
+ const endpoint=document.getElementById("relayEndpoint").value.trim().replace(/\/$/,""),key=document.getElementById("relayKey").value.trim(),status=document.getElementById("relayStatus");
+ if(!endpoint||!/^https:\/\//i.test(endpoint)||!endpoint.endsWith("/api/relay")||!key){status.textContent="Enter an HTTPS Vercel endpoint ending in /api/relay and its relay key.";return;}
  localStorage.setItem("ashika_relay_endpoint",endpoint);localStorage.setItem("ashika_relay_key",key);
  status.textContent="Relay settings saved. New channel playbacks will use the relay.";
 }
@@ -521,7 +521,7 @@ function ashikaBuildRelayUrl(sourceUrl,headers){
  try{
   const q=new URLSearchParams();q.set("url",sourceUrl);q.set("key",cfg.key);
   const safe={};Object.keys(headers||{}).forEach(k=>{if(/^(user-agent|referer|origin|cookie|accept|accept-language)$/i.test(k))safe[k]=String(headers[k]);});
-  if(Object.keys(safe).length){const bytes=unescape(encodeURIComponent(JSON.stringify(safe)));q.set("h",btoa(bytes).replace(/\\+/g,"-").replace(/\\//g,"_").replace(/=+$/,""));}
+  if(Object.keys(safe).length){const bytes=unescape(encodeURIComponent(JSON.stringify(safe)));q.set("h",btoa(bytes).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,""));}
   return cfg.endpoint+"?"+q.toString();
  }catch(_){return "";}
 }
