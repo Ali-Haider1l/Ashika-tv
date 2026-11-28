@@ -220,10 +220,10 @@ jobs:
           payload = subprocess.check_output(["ar", "p", str(package), data_name])
           with tarfile.open(fileobj=io.BytesIO(payload), mode="r:*") as archive:
               files = {pathlib.PurePosixPath(item.name).name: item for item in archive.getmembers() if item.isfile()}
-              for required in ("index.html", "appinfo.json", "icon.png"):
+              for required in ("index.html", "appinfo.json", "icon.png", "largeicon.png"):
                   assert required in files, f"Missing {required} inside IPK"
               assert files["index.html"].size >= 40000, "Packaged app HTML is unexpectedly incomplete"
-              print("IPK payload verified:", {name: files[name].size for name in ("index.html", "appinfo.json", "icon.png")})
+              print("IPK payload verified:", {name: files[name].size for name in ("index.html", "appinfo.json", "icon.png", "largeicon.png")})
           print("Final IPK bytes:", package.stat().st_size)
           PY
 
