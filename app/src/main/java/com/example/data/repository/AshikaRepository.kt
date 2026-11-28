@@ -134,16 +134,33 @@ class AshikaRepository(
         if (!M3uParser.isValidStreamUrl(cleanUrl)) {
             return Result.failure(IllegalArgumentException("Enter a valid HTTP or HTTPS playlist URL."))
         }
+
+        // Save the user's playlist URL before attempting the network request.
+        // If the source is temporarily offline or blocked by CORS, it remains
+        // visible in Saved Playlists and can be retried later.
+        val existing = dao.getPlaylistsSnapshot()
+            .firstOrNull { it.url.equals(cleanUrl, ignoreCase = true) }
+        dao.upsertPlaylist(
+            PlaylistEntity(
+                url = cleanUrl,
+                title = existing?.title ?: friendlyPlaylistTitle(cleanUrl),
+                channelCount = existing?.channelCount ?: 0,
+                lastRefreshedAt = existing?.lastRefreshedAt ?: 0L
+            )
+        )
+
         val result = fetcher.fetchM3u(cleanUrl)
         return result.map { parsed ->
             val loaded = parsed.channels
+            if (loaded.isEmpty()) {
+                throw IllegalStateException("Playlist opened but contained no valid channels.")
+            }
             dao.upsertChannels(loaded)
             dao.syncChannelFavoriteFlagsForProfile(prefs.activeProfileFlow.first())
-            val title = friendlyPlaylistTitle(cleanUrl)
             dao.upsertPlaylist(
                 PlaylistEntity(
                     url = cleanUrl,
-                    title = title,
+                    title = existing?.title ?: friendlyPlaylistTitle(cleanUrl),
                     channelCount = loaded.size,
                     lastRefreshedAt = System.currentTimeMillis()
                 )
