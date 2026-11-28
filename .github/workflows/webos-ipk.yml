@@ -53,7 +53,8 @@ jobs:
           d.ellipse((210, 172, 302, 264), fill=(237, 49, 89))
           d.polygon([(247, 193), (247, 243), (286, 218)], fill=(255,255,255))
           d.rounded_rectangle((178, 414, 334, 438), radius=12, fill=(185,157,255))
-          im.save("webos/icon.png", "PNG", optimize=True)
+          im.resize((80, 80), Image.Resampling.LANCZOS).save("webos/icon.png", "PNG", optimize=True)
+          im.resize((130, 130), Image.Resampling.LANCZOS).save("webos/largeicon.png", "PNG", optimize=True)
           PY
 
       - name: Validate webOS app metadata
@@ -65,6 +66,11 @@ jobs:
           assert info["id"] and info["main"] and info["icon"]
           for key in ("main", "icon", "largeIcon"):
               assert (root / info[key]).is_file(), f"Missing {key}: {info[key]}"
+          from PIL import Image
+          expected_sizes = {"icon": (80, 80), "largeIcon": (130, 130)}
+          for key, expected in expected_sizes.items():
+              with Image.open(root / info[key]) as image:
+                  assert image.size == expected, f"{key} must be {expected}, got {image.size}"
           assert (root / "index.html").is_file()
 
           # Keep every screen/control and JavaScript function from the canonical app.
@@ -175,7 +181,7 @@ jobs:
           const vm = require('vm');
           const html = fs.readFileSync('webos-build/index.html', 'utf8');
           const info = JSON.parse(fs.readFileSync('webos-build/appinfo.json', 'utf8'));
-          if (info.version !== '9.5.1') throw new Error('App metadata version mismatch');
+          if (info.version !== '9.5.2') throw new Error('App metadata version mismatch');
           if (html.includes('.matchAll(')) throw new Error('Unsupported String.matchAll remains in webOS bundle');
           for (const fn of ['ashikaAddPlaylist','loadPlaylist','renderPlaylistManager','ashikaRestoreInternalChannels','ashikaExtractToffeeHtml']) {
             if (!html.includes('function ' + fn + '(')) throw new Error('Missing runtime function: ' + fn);
@@ -224,7 +230,7 @@ jobs:
       - name: Upload IPK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Ashika-TV-webOS-IPK-v9.5.1
+          name: Ashika-TV-webOS-IPK-v9.5.2
           path: dist/*.ipk
           retention-days: 90
 
@@ -232,8 +238,8 @@ jobs:
         if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: webos-v9.5.1
+          tag_name: webos-v9.5.2
           target_commitish: main
-          name: Ashika TV webOS v9.5.1
+          name: Ashika TV webOS v9.5.2
           generate_release_notes: true
           files: dist/*.ipk
